@@ -1,0 +1,67 @@
+# ===========================
+# Node.js / Next.js
+# ===========================
+node_modules/
+.next/
+out/
+dist/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===========================
+# Environment Variables
+# ===========================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ===========================
+# Python / FastAPI
+# ===========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+venv/
+.venv/
+env/
+
+.pytest_cache/
+.mypy_cache/
+
+# ===========================
+# IDE
+# ===========================
+.vscode/
+.idea/
+
+# ===========================
+# OS Files
+# ===========================
+.DS_Store
+Thumbs.db
+
+# ===========================
+# Coverage & Build
+# ===========================
+coverage/
+build/
+
+# ===========================
+# Local Databases
+# ===========================
+*.sqlite3
+
+# ===========================
+# Temporary Files
+# ===========================
+*.log
+*.tmp
+*.swp
