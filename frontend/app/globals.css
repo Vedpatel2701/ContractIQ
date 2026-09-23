@@ -3,48 +3,97 @@
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
 :root {
-  --background: #f4f7fb;
+  --background: #f8fafc;
   --foreground: #0f172a;
   --surface: #ffffff;
   --surface-elevated: #ffffff;
-  --surface-muted: #f8fafc;
+  --surface-muted: #f1f5f9;
   --surface-strong: #e2e8f0;
-  --border: rgba(15, 23, 42, 0.09);
+  --border: #e2e8f0;
+  --border-subtle: #f1f5f9;
+  --border-strong: #cbd5e1;
+  
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #64748b;
-  --accent: #0f766e;
-  --accent-soft: rgba(14, 116, 144, 0.08);
-  --success: #15803d;
-  --warning: #b45309;
-  --danger: #b91c1c;
-  --shadow-soft: 0 18px 40px rgba(15, 23, 42, 0.08);
+  
+  /* Primary LegalTech Corporate Blue */
+  --primary: #1e3a8a;
+  --primary-hover: #1e40af;
+  --primary-fg: #ffffff;
+  
+  /* Accent Sapphire */
+  --accent: #2563eb;
+  --accent-soft: #eff6ff;
+  --accent-hover: #1d4ed8;
+  
+  /* Status Colors */
+  --success: #16a34a;
+  --success-bg: #f0fdf4;
+  --success-border: #bbf7d0;
+  --success-text: #15803d;
+  
+  --warning: #d97706;
+  --warning-bg: #fffbeb;
+  --warning-border: #fde68a;
+  --warning-text: #b45309;
+  
+  --danger: #dc2626;
+  --danger-bg: #fef2f2;
+  --danger-border: #fecaca;
+  --danger-text: #b91c1c;
+
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow-card: 0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.08);
+  --shadow-elevated: 0 10px 15px -3px rgba(15, 23, 42, 0.06), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
 }
 
 :root[data-theme="dark"] {
-  --background: #07111d;
-  --foreground: #e5edf9;
+  --background: #090e17;
+  --foreground: #f1f5f9;
   --surface: #0f172a;
-  --surface-elevated: #162235;
-  --surface-muted: #111c2d;
-  --surface-strong: #172333;
-  --border: rgba(148, 163, 184, 0.16);
-  --text-primary: #e5edf9;
-  --text-secondary: #b6c3d8;
-  --text-muted: #8ea1bd;
-  --accent: #5eead4;
-  --accent-soft: rgba(94, 234, 212, 0.12);
-  --success: #86efac;
-  --warning: #fbbf24;
-  --danger: #fca5a5;
-  --shadow-soft: 0 18px 40px rgba(2, 6, 23, 0.28);
+  --surface-elevated: #152136;
+  --surface-muted: #131e30;
+  --surface-strong: #1e293b;
+  --border: #1e293b;
+  --border-subtle: #162032;
+  --border-strong: #334155;
+  
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+  --primary-fg: #090e17;
+  
+  --accent: #3b82f6;
+  --accent-soft: rgba(59, 130, 246, 0.12);
+  --accent-hover: #60a5fa;
+  
+  --success: #22c55e;
+  --success-bg: rgba(34, 197, 94, 0.12);
+  --success-border: rgba(34, 197, 94, 0.25);
+  --success-text: #4ade80;
+  
+  --warning: #f59e0b;
+  --warning-bg: rgba(245, 158, 11, 0.12);
+  --warning-border: rgba(245, 158, 11, 0.25);
+  --warning-text: #fbbf24;
+  
+  --danger: #ef4444;
+  --danger-bg: rgba(239, 68, 68, 0.12);
+  --danger-border: rgba(239, 68, 68, 0.25);
+  --danger-text: #f87171;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
+  --shadow-elevated: 0 10px 20px -3px rgba(0, 0, 0, 0.5);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
 }
 
 * {
@@ -54,13 +103,15 @@
 html {
   min-height: 100%;
   background: var(--background);
+  color: var(--foreground);
 }
 
 body {
   min-height: 100vh;
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
@@ -69,18 +120,11 @@ a {
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
   color: var(--foreground);
 }
 
-button,
-a,
-input,
-select {
-  -webkit-tap-highlight-color: transparent;
-}
-
 :focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }

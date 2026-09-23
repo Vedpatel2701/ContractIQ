@@ -55,13 +55,19 @@ coverage/
 build/
 
 # ===========================
-# Local Databases
+# Local Databases & Storage
 # ===========================
+*.db
+*.sqlite
 *.sqlite3
+contractiq.db
+backend/contractiq.db
+storage/
+backend/storage/
 
 # ===========================
 # Temporary Files
 # ===========================
 *.log
 *.tmp
-*.swp
+*.swp

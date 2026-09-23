@@ -1,145 +1,179 @@
-import Link from "next/link";
+import React from "react";
 
 import { PageHeader } from "@/components/page-header";
-import { getContractById } from "@/lib/contracts";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { StatusBadge, RiskBadge } from "@/components/ui/status-badge";
+import { fetchContractById } from "@/lib/api";
 
 export default async function ContractDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const contract = getContractById(id);
+  const contract = await fetchContractById(id);
 
   if (!contract) {
     return (
       <div className="space-y-6">
         <PageHeader
-          eyebrow="Contract"
+          backHref="/dashboard/contracts"
+          backLabel="Contracts Directory"
           title="Contract not found"
-          description="This agreement could not be located in the current workspace."
+          description="The requested agreement could not be located."
         />
-        <Link href="/dashboard/contracts" className="text-sm font-medium text-sky-600 hover:text-sky-500 dark:text-sky-400">
-          Back to contracts
-        </Link>
+        <Button href="/dashboard/contracts" variant="outline">
+          Back to Contracts Directory
+        </Button>
       </div>
     );
   }
 
+  const keyInfoItems = [
+    { label: "Contract Type", value: contract.contractType || "Commercial Agreement" },
+    { label: "Effective Date", value: contract.startDate || "Not specified" },
+    { label: "Expiry Date", value: contract.expiryDate || "Not specified" },
+    { label: "Renewal Date", value: contract.renewalDate || "Not specified" },
+    { label: "Notice Period", value: contract.noticePeriod || "Not specified" },
+    { label: "Payment Terms", value: contract.paymentTerms || "Standard Terms" },
+  ];
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* Top Header with Breadcrumbs & Primary Actions */}
       <PageHeader
-        eyebrow="Contract overview"
+        backHref="/dashboard/contracts"
+        backLabel="Contracts"
         title={contract.name}
-        description={contract.summary}
+        description={`Analyzed agreement with ${contract.company} • File: ${contract.fileName || "Uploaded Document"}`}
         actions={
-          <div className="flex flex-wrap gap-3">
-            <Link href={`/dashboard/contracts/${contract.id}/chat`} className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm dark:bg-cyan-400 dark:text-slate-950">
-              Ask AI
-            </Link>
-            <Link href="/dashboard/contracts" className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--foreground)] shadow-sm">
-              Back to contracts
-            </Link>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Button href={`/dashboard/contracts/${contract.id}/chat`} size="md">
+              💬 Ask Contract Assistant
+            </Button>
           </div>
         }
       />
 
-      <div className="grid gap-6 xl:grid-cols-[1.45fr_0.8fr]">
-        <div className="space-y-6">
-          <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-soft)]">
-            <div className="flex items-start justify-between gap-4">
+      {/* Snapshot Header Card */}
+      <Card className="p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-[var(--border)] pb-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs font-semibold text-[var(--text-secondary)]">Status:</span>
+            <StatusBadge status={contract.status} />
+            <span className="text-xs font-semibold text-[var(--text-secondary)] ml-2">Risk Rating:</span>
+            <RiskBadge risk={contract.riskLevel} />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-secondary)]">
+            <span>Customer: <strong className="text-[var(--foreground)]">{contract.parties.customer}</strong></span>
+            <span>•</span>
+            <span>Vendor: <strong className="text-[var(--foreground)]">{contract.parties.vendor}</strong></span>
+            <span>•</span>
+            <span>Legal Owner: <strong className="text-[var(--foreground)]">{contract.parties.legalOwner}</strong></span>
+          </div>
+        </div>
+
+        {/* Key Information 6-Grid */}
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {keyInfoItems.map((item) => (
+            <div key={item.label} className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3.5 space-y-1">
+              <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">{item.label}</p>
+              <p className="text-sm font-semibold text-[var(--foreground)]">{item.value}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Main 2-Column Split: Summary & Clauses vs Risk Review */}
+      <div className="grid gap-8 lg:grid-cols-3">
+        {/* Left 2 Cols: Summary & Key Clauses */}
+        <div className="space-y-8 lg:col-span-2">
+          {/* Executive Summary */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-[var(--foreground)]">Executive Summary</h2>
+              <span className="text-[11px] text-[var(--text-muted)]">AI-assisted analysis</span>
+            </div>
+            <Card className="p-5">
+              <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+                {contract.summary || "This agreement establishes key commercial obligations, service level guidelines, and standard terms."}
+              </p>
+            </Card>
+          </section>
+
+          {/* Important Clauses */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Overview</p>
-                <h2 className="mt-2 text-xl font-semibold text-[var(--foreground)]">Contract snapshot</h2>
+                <h2 className="text-lg font-bold text-[var(--foreground)]">Important Clauses</h2>
+                <p className="text-xs text-[var(--text-secondary)]">Extracted provisions from the contract text</p>
               </div>
-              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                {contract.status}
+              <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                {contract.clauses.length} Clauses Extracted
               </span>
             </div>
 
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              {[
-                ["Customer", contract.parties.customer],
-                ["Vendor", contract.parties.vendor],
-                ["Contract type", contract.contractType],
-                ["Risk level", contract.riskLevel],
-                ["Legal owner", contract.parties.legalOwner],
-                ["Start date", new Date(contract.startDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })],
-                ["Renewal date", new Date(contract.renewalDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })],
-                ["Notice period", contract.noticePeriod],
-                ["Expiry date", new Date(contract.expiryDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })],
-                ["Last updated", new Date(contract.lastUpdated).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-3.5">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{label}</p>
-                  <p className="mt-2 text-sm font-medium text-[var(--foreground)]">{value}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-soft)]">
-            <h2 className="text-xl font-semibold text-[var(--foreground)]">Important clauses</h2>
-            <div className="mt-5 space-y-3">
-              {contract.clauses.map((clause) => (
-                <div key={clause} className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-cyan-500" />
-                    <p className="text-sm font-medium text-[var(--foreground)]">Clause review</p>
+            <div className="space-y-3">
+              {contract.clauses.map((clause, index) => (
+                <Card key={index} className="p-4 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                      Clause #{index + 1}
+                    </span>
+                    <span className="text-[11px] text-[var(--text-muted)]">Verified from document</span>
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{clause}</p>
-                </div>
+                  <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{clause}</p>
+                </Card>
               ))}
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-soft)]">
-            <h2 className="text-xl font-semibold text-[var(--foreground)]">Commercial terms</h2>
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Payment terms</p>
-                <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{contract.paymentTerms}</p>
-              </div>
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Penalty info</p>
-                <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{contract.penaltyInfo}</p>
-              </div>
             </div>
           </section>
         </div>
 
-        <div className="space-y-6">
-          <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-soft)]">
-            <h2 className="text-xl font-semibold text-[var(--foreground)]">Risk indicators</h2>
-            <div className="mt-5 space-y-3">
-              {contract.riskIndicators.map((item) => (
-                <div key={item} className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-3.5 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                  {item}
+        {/* Right 1 Col: AI-assisted Risk Review & Assistant Quick-Prompt */}
+        <div className="space-y-8">
+          {/* Risk Review */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-[var(--foreground)]">Risk Review</h2>
+                <p className="text-xs text-[var(--text-secondary)]">AI-assisted risk identification</p>
+              </div>
+              <RiskBadge risk={contract.riskLevel} />
+            </div>
+
+            <div className="space-y-3">
+              {contract.riskIndicators.map((riskItem, index) => (
+                <div
+                  key={index}
+                  className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-xs dark:border-amber-900/60 dark:bg-amber-950/30 space-y-1.5"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-[10px] font-bold text-amber-900 dark:bg-amber-900 dark:text-amber-200">
+                      !
+                    </span>
+                    <span className="font-semibold text-amber-900 dark:text-amber-300">
+                      Potential issue requiring review
+                    </span>
+                  </div>
+                  <p className="text-amber-950 dark:text-amber-200 leading-relaxed pl-7">
+                    {riskItem}
+                  </p>
                 </div>
               ))}
             </div>
           </section>
 
-          <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-soft)]">
-            <h2 className="text-xl font-semibold text-[var(--foreground)]">AI summary</h2>
-            <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
-              <p className="text-sm leading-7 text-slate-700 dark:text-slate-200">
-                AI-generated summary placeholder: the agreement is operationally stable but should be reviewed for renewal timing, liability balance, and business continuity language before the next renewal cycle.
-              </p>
+          {/* Assistant Quick Action Card */}
+          <Card className="p-5 space-y-3 bg-gradient-to-br from-blue-50/50 to-slate-50 dark:from-blue-950/20 dark:to-slate-900">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">💬</span>
+              <h3 className="text-sm font-bold text-[var(--foreground)]">Have questions about this contract?</h3>
             </div>
-          </section>
-
-          <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-soft)]">
-            <h2 className="text-xl font-semibold text-[var(--foreground)]">Next actions</h2>
-            <div className="mt-5 space-y-3">
-              {[
-                "Confirm renewal notice timeline",
-                "Validate indemnity and penalty limits",
-                "Review data residency obligations",
-              ].map((action) => (
-                <div key={action} className="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-sm text-slate-700 dark:text-slate-200">
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white dark:bg-cyan-400 dark:text-slate-950">✓</span>
-                  {action}
-                </div>
-              ))}
-            </div>
-          </section>
+            <p className="text-xs text-[var(--text-secondary)]">
+              Ask Contract Assistant to find specific payment clauses, termination rules, or liability terms with exact source citations.
+            </p>
+            <Button href={`/dashboard/contracts/${contract.id}/chat`} size="sm" className="w-full">
+              Open Contract Assistant →
+            </Button>
+          </Card>
         </div>
       </div>
     </div>

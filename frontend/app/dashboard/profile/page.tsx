@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 export default function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [name, setName] = useState("Priya Shah");
+  const [name, setName] = useState("Ved Patel");
   const [organization, setOrganization] = useState("ContractIQ Services");
   const [draftName, setDraftName] = useState(name);
   const [draftOrganization, setDraftOrganization] = useState(organization);
@@ -46,7 +46,7 @@ export default function ProfilePage() {
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
         <div className="flex items-center gap-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-lg font-semibold text-white dark:bg-cyan-400 dark:text-slate-950">
-            PS
+            VP
           </div>
           <div>
             <p className="text-lg font-semibold text-[var(--foreground)]">{name}</p>
@@ -55,7 +55,7 @@ export default function ProfilePage() {
         </div>
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
           <div><p className="text-xs uppercase tracking-wide text-slate-500">Name</p>{editing ? <Input value={draftName} onChange={(event) => setDraftName(event.target.value)} className="mt-2" aria-label="Profile name" /> : <p className="mt-2 text-sm font-medium">{name}</p>}</div>
-          <div><p className="text-xs uppercase tracking-wide text-slate-500">Email</p><p className="mt-2 text-sm font-medium">priya.shah@contractiq.demo</p></div>
+          <div><p className="text-xs uppercase tracking-wide text-slate-500">Email</p><p className="mt-2 text-sm font-medium">vedpatel@contractiq.demo</p></div>
           <div><p className="text-xs uppercase tracking-wide text-slate-500">Organization</p>{editing ? <Input value={draftOrganization} onChange={(event) => setDraftOrganization(event.target.value)} className="mt-2" aria-label="Organization" /> : <p className="mt-2 text-sm font-medium">{organization}</p>}</div>
           <div><p className="text-xs uppercase tracking-wide text-slate-500">Role</p><p className="mt-2 text-sm font-medium">Head of Legal Operations</p></div>
         </div>

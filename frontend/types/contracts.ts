@@ -23,4 +23,6 @@ export type ContractRecord = {
     vendor: string;
     legalOwner: string;
   };
+  fileName?: string;
+  fileSize?: string;
 };

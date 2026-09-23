@@ -34,7 +34,7 @@ export const contracts: ContractRecord[] = [
     parties: {
       customer: "Northstar Labs",
       vendor: "ContractIQ Services",
-      legalOwner: "Priya Shah"
+      legalOwner: "Ved Patel"
     }
   },
   {
