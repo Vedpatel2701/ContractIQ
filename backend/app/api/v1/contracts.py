@@ -3,18 +3,27 @@ import uuid
 import shutil
 from pathlib import Path
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.config import settings
 from app.models.contract import Contract
 from app.models.clause import Clause
 from app.models.risk import RiskIndicator
+from app.models.user import User, UserRole
 from app.schemas.contract import ContractResponse
 from app.services.extractor import extract_text_from_file
 from app.services.chunker import chunk_contract_text
 from app.services.vector_store import VectorStore
 from app.services.llm import classify_document_text, analyze_contract_text
+from app.api.deps import (
+    get_current_user,
+    get_current_user_or_demo,
+    require_roles,
+    verify_contract_access,
+    filter_authorized_contracts,
+)
 
 router = APIRouter(prefix="/contracts", tags=["Contracts"])
 
@@ -45,14 +54,15 @@ def format_contract_response(c: Contract) -> dict:
         "fileSize": c.file_size
     }
 
-@router.get("", response_model=List[ContractResponse])
+@router.get("", response_model=List[ContractResponse], response_model_by_alias=False)
 def get_contracts(
     status: Optional[str] = None,
     risk: Optional[str] = None,
     search: Optional[str] = None,
+    current_user: User = Depends(get_current_user_or_demo),
     db: Session = Depends(get_db)
 ):
-    query = db.query(Contract)
+    query = filter_authorized_contracts(db.query(Contract), current_user)
     if status and status != "All":
         query = query.filter(Contract.status == status)
     if risk and risk != "All":
@@ -64,18 +74,41 @@ def get_contracts(
     contracts = query.order_by(Contract.created_at.desc()).all()
     return [format_contract_response(c) for c in contracts]
 
-@router.get("/{contract_id}", response_model=ContractResponse)
-def get_contract(contract_id: str, db: Session = Depends(get_db)):
-    contract = db.query(Contract).filter(Contract.id == contract_id).first()
-    if not contract:
-        raise HTTPException(status_code=404, detail="Contract not found")
+@router.get("/{contract_id}", response_model=ContractResponse, response_model_by_alias=False)
+def get_contract(
+    contract_id: str,
+    current_user: User = Depends(get_current_user_or_demo),
+    db: Session = Depends(get_db)
+):
+    contract = verify_contract_access(contract_id, current_user, db)
     return format_contract_response(contract)
 
-@router.post("/upload", response_model=ContractResponse)
+@router.get("/{contract_id}/file")
+def get_contract_file(
+    contract_id: str,
+    current_user: User = Depends(get_current_user_or_demo),
+    db: Session = Depends(get_db)
+):
+
+    contract = verify_contract_access(contract_id, current_user, db)
+    
+    if contract.file_path and os.path.exists(contract.file_path):
+        media_type = "application/pdf" if contract.file_path.endswith(".pdf") else "text/plain"
+        return FileResponse(
+            contract.file_path,
+            media_type=media_type,
+            filename=contract.file_name or f"{contract_id}.pdf"
+        )
+    
+    content = contract.extracted_text or f"# {contract.name}\nCompany: {contract.company}\nType: {contract.contract_type}\n\nSummary:\n{contract.summary}\n\nPayment Terms:\n{contract.payment_terms}\nNotice Period:\n{contract.notice_period}"
+    return Response(content=content, media_type="text/plain; charset=utf-8")
+
+@router.post("/upload", response_model=ContractResponse, response_model_by_alias=False)
 async def upload_contract(
     file: UploadFile = File(...),
     company: Optional[str] = Form(None),
     contract_name: Optional[str] = Form(None),
+    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.CONTRACT_MANAGER])),
     db: Session = Depends(get_db)
 ):
     temp_dir = settings.UPLOAD_DIR / "temp"
@@ -88,107 +121,121 @@ async def upload_contract(
             shutil.copyfileobj(file.file, buffer)
             
         file_size_bytes = os.path.getsize(temp_file_path)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read uploaded file: {e}")
 
-    # 1. Extract text
-    extracted_text = extract_text_from_file(str(temp_file_path))
-    if not extracted_text or len(extracted_text.strip()) < 20:
-        if temp_file_path.exists():
-            temp_file_path.unlink()
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "is_contract": False,
-                "detected_type": "Unreadable or Blank Document",
-                "reason": "The file contains no readable text. If this is a scanned document, ensure text is legible.",
-                "message": "Document not accepted: No readable text found."
-            }
+        # 1. Extract text
+        extracted_text = extract_text_from_file(str(temp_file_path))
+        if not extracted_text or len(extracted_text.strip()) < 20:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "is_contract": False,
+                    "detected_type": "Unreadable or Blank Document",
+                    "reason": "The file contains no readable text. If this is a scanned document, ensure text is legible.",
+                    "message": "Document not accepted: No readable text found."
+                }
+            )
+
+        # 2. Document Classification (Reject non-contracts)
+        classification = classify_document_text(extracted_text)
+        if not classification.get("is_contract", False):
+            detected = classification.get("detected_type", "Non-Contract Document")
+            reason = classification.get("reason", "This document is not a legal contract or agreement.")
+            missing = classification.get("missing_elements", [])
+            present = classification.get("present_elements", [])
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "is_contract": False,
+                    "detected_type": detected,
+                    "reason": reason,
+                    "missing_elements": missing,
+                    "present_elements": present,
+                    "message": f"Document rejected: Detected '{detected}'. {reason}"
+                }
+            )
+
+        # 3. Create persistent Contract Record (Only after verification)
+        final_contract_id = f"CON-{uuid.uuid4().hex[:4].upper()}"
+        final_dir = settings.UPLOAD_DIR / final_contract_id
+        final_dir.mkdir(parents=True, exist_ok=True)
+        final_file_path = final_dir / file.filename
+        shutil.move(str(temp_file_path), str(final_file_path))
+
+        size_str = f"{round(file_size_bytes / (1024 * 1024), 2)} MB" if file_size_bytes >= 1048576 else f"{round(file_size_bytes / 1024, 1)} KB"
+
+        # Extract contract terms via LLM / accurate NLP
+        analysis = analyze_contract_text(extracted_text)
+        
+        inferred_name = contract_name or analysis.get("contractType") or file.filename.rsplit(".", 1)[0].replace("_", " ").title()
+        inferred_company = company or analysis.get("company") or "Contract Partner"
+
+        contract = Contract(
+            id=final_contract_id,
+            owner_id=current_user.id,
+            name=inferred_name,
+            contract_type=analysis.get("contractType", "Commercial Agreement"),
+            company=inferred_company,
+            status=analysis.get("status", "Active"),
+            risk_level=analysis.get("riskLevel", "Not Assessed"),
+            start_date=analysis.get("startDate"),
+            expiry_date=analysis.get("expiryDate"),
+            renewal_date=analysis.get("renewalDate"),
+            notice_period=analysis.get("noticePeriod"),
+            payment_terms=analysis.get("paymentTerms"),
+            penalty_info=analysis.get("penaltyInfo"),
+            summary=analysis.get("summary"),
+            customer=analysis.get("customer"),
+            vendor=analysis.get("vendor"),
+            file_path=str(final_file_path),
+            file_name=file.filename,
+            file_size=size_str,
+            extracted_text=extracted_text
         )
+        db.add(contract)
+        db.commit()
 
-    # 2. Document Classification (Reject non-contracts)
-    classification = classify_document_text(extracted_text)
-    if not classification.get("is_contract", False):
+        # Chunk text and index in isolated VectorStore (after Contract parent row is committed)
+        chunks = chunk_contract_text(extracted_text)
+        if chunks:
+            vector_store = VectorStore(final_contract_id)
+            vector_store.add_chunks(chunks, db=db)
+
+        # Add extracted clauses
+        for clause_text in analysis.get("clauses", []):
+            db.add(Clause(contract_id=contract.id, text=clause_text))
+
+        # Add risk indicators
+        for risk_text in analysis.get("riskIndicators", []):
+            db.add(RiskIndicator(contract_id=contract.id, description=risk_text, severity=contract.risk_level))
+
+        db.commit()
+        db.refresh(contract)
+        return format_contract_response(contract)
+    finally:
         if temp_file_path.exists():
-            temp_file_path.unlink()
-        detected = classification.get("detected_type", "Non-Contract Document")
-        reason = classification.get("reason", "This document is not a legal contract or agreement.")
-        missing = classification.get("missing_elements", [])
-        present = classification.get("present_elements", [])
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "is_contract": False,
-                "detected_type": detected,
-                "reason": reason,
-                "missing_elements": missing,
-                "present_elements": present,
-                "message": f"Document rejected: Detected '{detected}'. ContractIQ requires a binding contract or legal agreement."
-            }
-        )
-
-    # 3. Create persistent Contract Record (Only after verification)
-    final_contract_id = f"CON-{uuid.uuid4().hex[:4].upper()}"
-    final_dir = settings.UPLOAD_DIR / final_contract_id
-    final_dir.mkdir(parents=True, exist_ok=True)
-    final_file_path = final_dir / file.filename
-    shutil.move(str(temp_file_path), str(final_file_path))
-
-    size_str = f"{round(file_size_bytes / (1024 * 1024), 2)} MB" if file_size_bytes >= 1048576 else f"{round(file_size_bytes / 1024, 1)} KB"
-
-    # 4. Chunk text and index in isolated VectorStore
-    chunks = chunk_contract_text(extracted_text)
-    if chunks:
-        vector_store = VectorStore(final_contract_id)
-        vector_store.add_chunks(chunks)
-
-    # 5. Extract actual contract terms via LLM / accurate NLP
-    analysis = analyze_contract_text(extracted_text)
-    
-    inferred_name = contract_name or analysis.get("contractType") or file.filename.rsplit(".", 1)[0].replace("_", " ").title()
-    inferred_company = company or analysis.get("company") or "Contract Partner"
-
-    contract = Contract(
-        id=final_contract_id,
-        name=inferred_name,
-        contract_type=analysis.get("contractType", "Commercial Agreement"),
-        company=inferred_company,
-        status=analysis.get("status", "Active"),
-        risk_level=analysis.get("riskLevel", "Not Assessed"),
-        start_date=analysis.get("startDate"),
-        expiry_date=analysis.get("expiryDate"),
-        renewal_date=analysis.get("renewalDate"),
-        notice_period=analysis.get("noticePeriod"),
-        payment_terms=analysis.get("paymentTerms"),
-        penalty_info=analysis.get("penaltyInfo"),
-        summary=analysis.get("summary"),
-        customer=analysis.get("customer"),
-        vendor=analysis.get("vendor"),
-        file_path=str(final_file_path),
-        file_name=file.filename,
-        file_size=size_str,
-        extracted_text=extracted_text
-    )
-    db.add(contract)
-    db.commit()
-
-    # Add extracted clauses
-    for clause_text in analysis.get("clauses", []):
-        db.add(Clause(contract_id=contract.id, text=clause_text))
-
-    # Add risk indicators
-    for risk_text in analysis.get("riskIndicators", []):
-        db.add(RiskIndicator(contract_id=contract.id, description=risk_text, severity=contract.risk_level))
-
-    db.commit()
-    db.refresh(contract)
-    return format_contract_response(contract)
+            import time
+            for _ in range(3):
+                try:
+                    temp_file_path.unlink()
+                    break
+                except Exception:
+                    time.sleep(0.05)
 
 @router.delete("/{contract_id}")
-def delete_contract(contract_id: str, db: Session = Depends(get_db)):
-    contract = db.query(Contract).filter(Contract.id == contract_id).first()
-    if not contract:
-        raise HTTPException(status_code=404, detail="Contract not found")
+def delete_contract(
+    contract_id: str,
+    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.CONTRACT_MANAGER])),
+    db: Session = Depends(get_db)
+):
+    contract = verify_contract_access(contract_id, current_user, db)
+    
+    # Contract Manager can only delete contracts they own (or admins can delete any)
+    user_role_str = current_user.role.value if isinstance(current_user.role, UserRole) else str(current_user.role)
+    if user_role_str != UserRole.ADMIN.value and contract.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Contract managers can only delete contracts they own"
+        )
     
     # Delete vector index if exists
     vector_file = settings.VECTOR_INDEX_DIR / f"{contract_id}_index.json"

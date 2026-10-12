@@ -1,56 +1,68 @@
 import React from "react";
 
-type StatusType = "Active" | "Review Required" | "Draft" | "Expired" | string;
+type StatusType = "Active" | "Review Required" | "Expiring" | "Draft" | "Expired" | string;
 type RiskType = "Low" | "Moderate" | "High" | "Critical" | string;
 
-export function StatusBadge({ status }: { status: StatusType }) {
-  let style = "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700";
+const statusStyles: Record<string, { bg: string; dot: string }> = {
+  Active: {
+    bg: "bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-border)]",
+    dot: "bg-[var(--success)]",
+  },
+  Expiring: {
+    bg: "bg-[var(--warning-bg)] text-[var(--warning-text)] border-[var(--warning-border)]",
+    dot: "bg-[var(--warning)]",
+  },
+  "Review Required": {
+    bg: "bg-[var(--warning-bg)] text-[var(--warning-text)] border-[var(--warning-border)]",
+    dot: "bg-[var(--warning)]",
+  },
+  Draft: {
+    bg: "bg-[var(--surface-strong)] text-[var(--text-secondary)] border-[var(--border-strong)]",
+    dot: "bg-[var(--text-muted)]",
+  },
+  Expired: {
+    bg: "bg-[var(--danger-bg)] text-[var(--danger-text)] border-[var(--danger-border)]",
+    dot: "bg-[var(--danger)]",
+  },
+};
 
-  switch (status) {
-    case "Active":
-      style = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/60";
-      break;
-    case "Review Required":
-      style = "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/60";
-      break;
-    case "Draft":
-      style = "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/60";
-      break;
-    case "Expired":
-      style = "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/60";
-      break;
-  }
+export function StatusBadge({ status }: { status?: StatusType }) {
+  const value = status || "Active";
+  const style = statusStyles[value] || {
+    bg: "bg-[var(--surface-strong)] text-[var(--text-secondary)] border-[var(--border)]",
+    dot: "bg-[var(--text-muted)]",
+  };
 
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-0.5 text-xs font-medium ${style}`}>
-      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-75" />
-      {status}
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold tracking-tight ${style.bg}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
+      <span>{value}</span>
     </span>
   );
 }
 
-export function RiskBadge({ risk }: { risk: RiskType }) {
-  let style = "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700";
-
-  switch (risk) {
-    case "Low":
-      style = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/60";
-      break;
-    case "Moderate":
-      style = "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/60";
-      break;
-    case "High":
-      style = "bg-orange-50 text-orange-800 border-orange-200 dark:bg-orange-950/40 dark:text-orange-400 dark:border-orange-800/60";
-      break;
-    case "Critical":
-      style = "bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/60";
-      break;
-  }
+export function RiskBadge({ risk }: { risk?: RiskType }) {
+  const value = risk && risk !== "Not Assessed" ? risk : "Moderate";
+  const tone =
+    value === "Low"
+      ? "text-[var(--success-text)] bg-[var(--success-bg)] border-[var(--success-border)]"
+      : value === "Moderate"
+      ? "text-[var(--warning-text)] bg-[var(--warning-bg)] border-[var(--warning-border)]"
+      : "text-[var(--danger-text)] bg-[var(--danger-bg)] border-[var(--danger-border)]";
 
   return (
-    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${style}`}>
-      <span className="font-semibold uppercase tracking-wider text-[10px]">Risk:</span>
-      {risk}
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${tone}`}>
+      {value} Risk
     </span>
   );
 }
+
+export function DemoBadge({ isDemo }: { isDemo?: boolean }) {
+  if (!isDemo) return null;
+  return (
+    <span className="inline-flex items-center rounded-full border border-[var(--border-strong)] bg-[var(--surface-strong)] px-2 py-0.5 text-[11px] font-semibold text-[var(--text-secondary)]">
+      Sample
+    </span>
+  );
+}
+

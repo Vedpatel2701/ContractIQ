@@ -1,5 +1,6 @@
 export type ContractStatus = "Active" | "Review Required" | "Draft" | "Expired";
 export type RiskLevel = "Low" | "Moderate" | "High" | "Critical";
+export type PaymentStatus = "Paid" | "Payment Due Soon" | "Payment Overdue" | "Not Applicable" | "Not Specified";
 
 export type ContractRecord = {
   id: string;
@@ -8,6 +9,8 @@ export type ContractRecord = {
   company: string;
   status: ContractStatus;
   riskLevel: RiskLevel;
+  paymentStatus?: PaymentStatus;
+  isDemo?: boolean;
   expiryDate: string;
   lastUpdated: string;
   startDate: string;

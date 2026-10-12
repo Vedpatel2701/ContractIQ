@@ -1,12 +1,12 @@
 export const navItems = [
-  { label: "Overview", href: "/#workflow" },
-  { label: "Features", href: "/#features" },
-  { label: "Security & Privacy", href: "/#security" },
+  { label: "Capabilities", href: "/#workflow" },
+  { label: "Verified Citations", href: "/#security" },
 ] as const;
 
 export const dashboardNavItems = [
   { label: "Overview", href: "/dashboard", icon: "layout-dashboard" },
   { label: "Contracts", href: "/dashboard/contracts", icon: "file-text" },
+  { label: "Contract Assistant", href: "/dashboard/assistant", icon: "bot" },
   { label: "Analyze Contract", href: "/dashboard/contracts/upload", icon: "upload", highlight: true },
   { label: "Notifications", href: "/dashboard/notifications", icon: "bell" },
 ] as const;

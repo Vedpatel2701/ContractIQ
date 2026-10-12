@@ -1,16 +1,86 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 from app.core.config import settings
 from app.core.database import engine, Base, SessionLocal
-from app.models import Contract, Clause, RiskIndicator, Notification
+from app.models import Contract, Clause, RiskIndicator, Notification, User, UserRole
+from app.core.security import hash_password
 from app.api.v1 import api_v1_router
 
+
 def init_db():
-    """Initializes tables and seeds initial contracts if database is empty."""
+    """Initializes tables, seed users, and initial contracts if database is empty."""
     Base.metadata.create_all(bind=engine)
+    # SQLite does not apply new ORM columns to an existing local database.
+    existing_columns = {column["name"] for column in inspect(engine).get_columns("contracts")}
+    migrations = {
+        "payment_status": "VARCHAR DEFAULT 'Paid'",
+        "is_demo": "BOOLEAN DEFAULT 0",
+        "owner_id": "VARCHAR",
+    }
+    with engine.begin() as connection:
+        for name, definition in migrations.items():
+            if name not in existing_columns:
+                connection.execute(text(f"ALTER TABLE contracts ADD COLUMN {name} {definition}"))
+
+    existing_notif_columns = {column["name"] for column in inspect(engine).get_columns("notifications")}
+    notif_migrations = {
+        "deadline_type": "VARCHAR",
+        "deadline_date": "VARCHAR",
+        "reminder_interval": "VARCHAR",
+        "status": "VARCHAR DEFAULT 'UPCOMING'",
+        "dedup_key": "VARCHAR",
+    }
+    with engine.begin() as connection:
+        for name, definition in notif_migrations.items():
+            if name not in existing_notif_columns:
+                connection.execute(text(f"ALTER TABLE notifications ADD COLUMN {name} {definition}"))
     db = SessionLocal()
     try:
+        # 1. Seed Default Users (Development / Academic Demo Accounts)
+        seed_users = [
+            {"email": "admin@gmail.com", "old_email": "admin@contractiq.com", "full_name": "Admin User", "password": "admin123", "role": UserRole.ADMIN.value},
+            {"email": "manager@gmail.com", "old_email": "manager@contractiq.com", "full_name": "Contract Manager", "password": "manager123", "role": UserRole.CONTRACT_MANAGER.value},
+            {"email": "viewer@gmail.com", "old_email": "viewer@contractiq.com", "full_name": "Viewer User", "password": "viewer123", "role": UserRole.VIEWER.value},
+        ]
+        admin_user_id = None
+        for u in seed_users:
+            user_obj = db.query(User).filter(User.email == u["email"]).first()
+            if not user_obj and u.get("old_email"):
+                user_obj = db.query(User).filter(User.email == u["old_email"]).first()
+                if user_obj:
+                    user_obj.email = u["email"]
+                    user_obj.full_name = u["full_name"]
+                    user_obj.hashed_password = hash_password(u["password"])
+                    user_obj.role = u["role"]
+                    db.commit()
+                    db.refresh(user_obj)
+            if not user_obj:
+                hashed_pwd = hash_password(u["password"])
+                user_obj = User(
+                    email=u["email"],
+                    full_name=u["full_name"],
+                    hashed_password=hashed_pwd,
+                    role=u["role"]
+                )
+                db.add(user_obj)
+                db.commit()
+                db.refresh(user_obj)
+            else:
+                user_obj.hashed_password = hash_password(u["password"])
+                user_obj.role = u["role"]
+                db.commit()
+                db.refresh(user_obj)
+
+            if u["role"] == UserRole.ADMIN.value:
+                admin_user_id = user_obj.id
+
+        # 2. Ensure existing contracts are marked is_demo = True if no owner_id is set
+        db.query(Contract).filter(Contract.owner_id == None).update({"is_demo": True}, synchronize_session=False)
+        db.commit()
+
+        # 3. Seed Initial Contracts
         if db.query(Contract).count() == 0:
             seed_contracts = [
                 {
@@ -101,9 +171,12 @@ def init_db():
             for item in seed_contracts:
                 clauses = item.pop("clauses")
                 risks = item.pop("risks")
+                item["is_demo"] = True
+                item["owner_id"] = admin_user_id
                 contract = Contract(**item)
                 db.add(contract)
                 db.commit()
+
 
                 for c_text in clauses:
                     db.add(Clause(contract_id=contract.id, text=c_text))

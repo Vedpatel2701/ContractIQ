@@ -2,15 +2,52 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import { dashboardNavItems, secondaryNavItems } from "@/constants/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
+
+interface CurrentUser {
+  id?: string;
+  email?: string;
+  full_name?: string;
+  role?: string;
+}
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("contractiq-token");
+      if (!token) {
+        router.replace("/login");
+        return;
+      }
+      const storedUser = localStorage.getItem("contractiq-user");
+      if (storedUser) {
+        try {
+          setCurrentUser(JSON.parse(storedUser));
+        } catch {
+          // ignore parsing error
+        }
+      }
+      setIsAuthenticated(true);
+    }
+  }, [router]);
+
+  const handleSignOut = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("contractiq-token");
+      localStorage.removeItem("contractiq-user");
+      localStorage.removeItem("contractiq-session");
+    }
+    router.push("/login");
+  };
 
   // SVG Icons helper for crisp rendering
   const renderIcon = (iconName?: string) => {
@@ -55,10 +92,47 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
           </svg>
         );
+      case "bot":
+        return (
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-4l-4 4-4-4z" />
+          </svg>
+        );
       default:
         return null;
     }
   };
+
+  const initials = currentUser?.full_name
+    ? currentUser.full_name
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "IQ";
+
+  const displayName = currentUser?.full_name || "ContractIQ User";
+  const displayRole =
+    currentUser?.role === "ADMIN"
+      ? "Administrator"
+      : currentUser?.role === "CONTRACT_MANAGER"
+      ? "Contract Manager"
+      : currentUser?.role === "VIEWER"
+      ? "Viewer"
+      : currentUser?.role || "Legal Team";
+
+  // If still checking authentication status, render a clean loading spinner
+  if (isAuthenticated !== true) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--background)]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+          <p className="text-xs font-semibold text-[var(--text-muted)] tracking-wider uppercase">Loading Workspace...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -66,13 +140,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)] lg:flex">
         {/* Brand Header */}
         <div className="flex h-16 items-center gap-3 border-b border-[var(--border)] px-6">
-          <Link href="/dashboard" className="flex items-center gap-2.5 font-semibold tracking-tight text-[var(--foreground)]">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 font-bold text-white shadow-sm">
+          <Link href="/dashboard" className="flex items-center gap-2.5 font-bold tracking-tight text-[var(--foreground)]">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-xs font-bold text-white shadow-sm">
               IQ
             </span>
             <div>
-              <span className="text-base font-bold tracking-tight">ContractIQ</span>
-              <span className="block text-[10px] font-medium tracking-wide uppercase text-[var(--text-muted)]">
+              <span className="text-sm font-bold tracking-tight">ContractIQ</span>
+              <span className="block text-[10px] font-semibold text-[var(--text-muted)] tracking-wider uppercase">
                 Legal Intelligence
               </span>
             </div>
@@ -83,23 +157,20 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <div className="p-4">
           <Link
             href="/dashboard/contracts/upload"
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:bg-blue-800"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98]"
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            Analyze Contract
+            + Analyze Contract
           </Link>
         </div>
 
-        {/* Primary Navigation */}
+        {/* Navigation */}
         <nav className="flex-1 space-y-1 px-3 py-2">
-          <div className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          <div className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
             Workspace
           </div>
           {dashboardNavItems.map((item) => {
             const isUpload = item.href === "/dashboard/contracts/upload";
-            if (isUpload) return null; // Already rendered as primary action
+            if (isUpload) return null;
 
             const active =
               item.href === "/dashboard"
@@ -110,9 +181,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.label}
                 href={item.href}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-medium transition-all ${
                   active
-                    ? "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 font-semibold"
+                    ? "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 font-semibold border-l-2 border-blue-600"
                     : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"
                 }`}
               >
@@ -124,7 +195,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             );
           })}
 
-          <div className="pt-6 px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          <div className="pt-5 px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
             Account
           </div>
           {secondaryNavItems.map((item) => {
@@ -133,9 +204,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.label}
                 href={item.href}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-medium transition-all ${
                   active
-                    ? "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 font-semibold"
+                    ? "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 font-semibold border-l-2 border-blue-600"
                     : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"
                 }`}
               >
@@ -149,15 +220,15 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* Footer / User Profile */}
-        <div className="border-t border-[var(--border)] p-4">
+        <div className="border-t border-[var(--border)] p-3.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5 overflow-hidden">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-                VP
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-blue-100 text-xs font-bold text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                {initials}
               </div>
               <div className="truncate">
-                <p className="truncate text-xs font-semibold text-[var(--foreground)]">Ved Patel</p>
-                <p className="truncate text-[11px] text-[var(--text-muted)]">Legal Admin</p>
+                <p className="truncate text-xs font-bold text-[var(--foreground)]">{displayName}</p>
+                <p className="truncate text-[10px] font-medium text-[var(--text-muted)]">{displayRole}</p>
               </div>
             </div>
             <ThemeToggle />
@@ -168,11 +239,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       {/* Main Content Area */}
       <div className="flex flex-1 flex-col min-w-0">
         {/* Top Navbar */}
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-[var(--border)] bg-[var(--surface)] px-4 sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-[var(--border)] bg-[var(--surface)] px-4 sm:px-6">
           <div className="flex items-center gap-3">
             <button
               type="button"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] lg:hidden"
+              className="inline-flex h-8 w-8 items-center justify-center rounded border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] lg:hidden"
               onClick={() => setMobileNavOpen((v) => !v)}
               aria-label="Toggle navigation"
             >
@@ -190,7 +261,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-3">
             <Link
               href="/dashboard/contracts/upload"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-blue-700 lg:hidden"
+              className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 lg:hidden"
             >
               + Analyze
             </Link>
@@ -199,11 +270,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </div>
             <button
               type="button"
-              onClick={() => {
-                window.localStorage.removeItem("contractiq-session");
-                router.push("/login");
-              }}
-              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"
+              onClick={handleSignOut}
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)] transition cursor-pointer"
             >
               Sign out
             </button>
@@ -212,16 +280,16 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
         {/* Mobile Navigation Drawer */}
         {mobileNavOpen && (
-          <div className="border-b border-[var(--border)] bg-[var(--surface)] p-4 lg:hidden">
+          <div className="border-b border-[var(--border)] bg-[var(--surface)] p-3 lg:hidden">
             <nav className="space-y-1">
               {dashboardNavItems.map((item) => (
                 <Link
                   key={item.label}
                   href={item.href}
                   onClick={() => setMobileNavOpen(false)}
-                  className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium ${
+                  className={`flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium ${
                     pathname === item.href
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 font-semibold"
+                      ? "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 font-semibold"
                       : "text-[var(--text-secondary)]"
                   }`}
                 >
@@ -235,7 +303,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
         {/* Page Content Viewport */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="mx-auto max-w-6xl space-y-6">{children}</div>
+          <div className="mx-auto max-w-7xl space-y-6">{children}</div>
         </main>
       </div>
     </div>

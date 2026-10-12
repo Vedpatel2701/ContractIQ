@@ -32,11 +32,84 @@ LEGAL_CONCEPT_DEFINITIONS = {
     "sla": "Service Level Agreements (SLAs) establish specific technical performance standards (such as 99.9% uptime, response times) and define the service credits or remedies for failure to meet them.",
 }
 
+def answer_general_question(question: str, all_contracts_meta: List[dict] = None) -> dict:
+    """
+    General Assistant pipeline: answers legal concepts, contract management guidance,
+    or general queries across all contracts in the workspace.
+    """
+    q_lower = question.lower()
+
+    # 1. Off-Topic Check
+    for pattern in OFF_TOPIC_PATTERNS:
+        if re.search(pattern, q_lower):
+            return {
+                "answer": "I am ContractIQ's Legal Assistant dedicated to analyzing contracts, legal terms, and commercial agreements. I cannot assist with off-topic subjects such as sports, recipes, or entertainment. Please ask any question regarding contract management, legal terminology, or your workspace agreements.",
+                "citations": []
+            }
+
+    # 2. Check for Legal Concept / Advisory queries
+    for concept, explanation in LEGAL_CONCEPT_DEFINITIONS.items():
+        if concept in q_lower:
+            answer = (
+                f"### Legal Concept: {concept.title()}\n\n"
+                f"{explanation}\n\n"
+                f"**General Guidance:** In commercial contracts, ensure this clause is reviewed carefully to protect your organization's financial and legal obligations."
+            )
+            return {
+                "answer": answer,
+                "citations": ["ContractIQ Legal Knowledge Base"]
+            }
+
+    # 3. Workspace-wide summary / multi-contract check
+    if all_contracts_meta and ("how many" in q_lower or "list" in q_lower or "overview" in q_lower or "summary" in q_lower or "high risk" in q_lower or "expir" in q_lower):
+        total = len(all_contracts_meta)
+        high_risk = [c for c in all_contracts_meta if (c.get("risk_level") or c.get("riskLevel")) == "High"]
+        expiring = [c for c in all_contracts_meta if c.get("expiry_date") or c.get("expiryDate")]
+        
+        summary_lines = [
+            f"### Workspace Contracts Overview\n\n",
+            f"- **Total Active Contracts:** {total}\n",
+            f"- **High-Risk Agreements requiring review:** {len(high_risk)}\n\n",
+        ]
+        if high_risk:
+            summary_lines.append("**High-Risk Contracts:**\n")
+            for h in high_risk[:3]:
+                c_name = h.get("name") or "Contract"
+                c_company = h.get("company") or "Partner"
+                summary_lines.append(f"- **{c_name}** ({c_company})\n")
+        
+        summary_lines.append("\nSelect a specific contract from the **Context selector** dropdown above to analyze individual clause provisions, payment terms, or notice windows.")
+        return {
+            "answer": "".join(summary_lines),
+            "citations": [f"ContractIQ Workspace Database ({total} Contracts)"]
+        }
+
+    # Default general guidance answer
+    return {
+        "answer": (
+            f"### General Contract & Legal Guidance\n\n"
+            f"You are currently in **General Context** mode. I can assist with general legal principles, contract clause standards, risk identification criteria, or workspace-wide contract summaries.\n\n"
+            f"To inspect specific terms, payment dates, or liability provisions of a particular agreement, use the **Context selector** at the top to select that contract."
+        ),
+        "citations": ["ContractIQ Workspace Assistant"]
+    }
+
 def answer_contract_question(contract_id: str, question: str, contract_meta: dict) -> dict:
     """
     RAG Chat pipeline: searches within this contract's vector chunks and provides well-structured,
     detailed answers for contract-specific and contract-adjacent questions, while deflecting off-topic queries.
     """
+    q_lower = question.lower()
+
+    # 1. Off-Topic Check
+    for pattern in OFF_TOPIC_PATTERNS:
+        if re.search(pattern, q_lower):
+            return {
+                "answer": "I am ContractIQ's Legal Document Assistant dedicated to analyzing contracts, legal terms, and commercial agreements. I cannot assist with off-topic queries like sports, recipes, or entertainment. Please ask any question regarding this contract's terms, clauses, obligations, or risks.",
+                "citations": [],
+                "sources": []
+            }
+
     vector_store = VectorStore(contract_id)
     relevant_chunks = vector_store.search(question, top_k=5)
 
@@ -47,11 +120,28 @@ def answer_contract_question(contract_id: str, question: str, contract_meta: dic
 
     doc_name = contract_meta.get("file_name") or contract_meta.get("name", "Contract Document")
     citations = []
+    sources = []
+
     for c in relevant_chunks:
-        page_str = f"Page {c.get('page_number')}" if c.get('page_number') else "Document Context"
-        chunk_excerpt = c.get("text", "").strip()[:180]
+        page_num = c.get("page_number")
+        section_name = c.get("section")
+        chunk_excerpt = c.get("text", "").strip()
+        chunk_id = c.get("chunk_id", 0)
+
+        page_str = f"Page {page_num}" if page_num and page_num > 0 else "Page Not Specified"
+        chunk_excerpt_short = chunk_excerpt[:180] + ("..." if len(chunk_excerpt) > 180 else "")
         if chunk_excerpt:
-            citations.append(f"{doc_name} • {page_str} (Chunk #{c.get('chunk_id', 0)}): \"{chunk_excerpt}...\"")
+            citations.append(f"{doc_name} • {page_str} (Chunk #{chunk_id}): \"{chunk_excerpt_short}\"")
+
+        sources.append({
+            "contract_id": contract_id,
+            "document_name": doc_name,
+            "chunk_id": chunk_id,
+            "page_number": page_num if (page_num and page_num > 0) else None,
+            "section": section_name if section_name else None,
+            "excerpt": chunk_excerpt[:350],
+            "file_url": f"/api/v1/contracts/{contract_id}/file"
+        })
 
     # If Gemini API key is configured, use LLM
     if settings.GEMINI_API_KEY:
@@ -70,7 +160,7 @@ GUIDELINES BY QUERY TYPE:
 1. CONTRACT-SPECIFIC FACTUAL QUESTIONS (e.g. dates, parties, payment terms, notice periods, specific clauses, penalties, obligations):
    - Answer directly and thoroughly using the provided Contract Metadata and Retrieved Document Context.
    - Use structured formatting (bullet points, bold highlights, subheadings where helpful).
-   - If a specific sub-detail is not explicitly written in the contract text (e.g. exact late fee percentage), clearly clarify that the contract does not specify that exact value, and highlight the closest related provisions found in the text.
+   - If a specific detail or provision requested by the user is not explicitly written in the provided Contract Metadata or Retrieved Document Context, you MUST clearly state: "This information could not be found in the contract." Never invent or fabricate unmentioned dates, figures, or clauses.
 
 2. CONTRACT-ADJACENT & LEGAL ADVISORY QUESTIONS (e.g. explaining legal terminology, comparing against industry standards, risk analysis, negotiation advice, breach implications, termination checklists):
    - Provide a knowledgeable, well-structured legal explanation of the concept.
@@ -111,7 +201,8 @@ User Question:
                     if answer_text:
                         return {
                             "answer": answer_text,
-                            "citations": citations
+                            "citations": citations,
+                            "sources": sources
                         }
                 except Exception as err:
                     print(f"[Gemini RAG Chat error with {model_name}]: {err}")
@@ -120,28 +211,30 @@ User Question:
             print(f"[Gemini RAG Chat Fallback] {e}")
 
     # Fallback to enhanced heuristic / semantic matcher
-    return heuristic_chat_response(question, contract_meta, relevant_chunks, citations)
+    return heuristic_chat_response(question, contract_meta, relevant_chunks, citations, sources)
 
 
-def heuristic_chat_response(question: str, contract_meta: dict, relevant_chunks: List[dict], citations: List[str]) -> dict:
+def heuristic_chat_response(question: str, contract_meta: dict, relevant_chunks: List[dict], citations: List[str], sources: List[dict] = None) -> dict:
     """
     Intelligent fallback responding accurately and structurally to contract queries,
     legal concept questions, and off-topic deflections when LLM is offline.
     """
     q_lower = question.lower()
+    if sources is None:
+        sources = []
 
     # 1. Off-Topic Check
     for pattern in OFF_TOPIC_PATTERNS:
         if re.search(pattern, q_lower):
             return {
                 "answer": "I am ContractIQ's Legal Document Assistant dedicated to analyzing contracts, legal terms, and commercial agreements. I cannot assist with off-topic queries like sports, recipes, or entertainment. Please ask any question regarding this contract's terms, clauses, obligations, or risks.",
-                "citations": []
+                "citations": [],
+                "sources": []
             }
 
     # 2. Check for Legal Concept / Advisory queries
     for concept, explanation in LEGAL_CONCEPT_DEFINITIONS.items():
         if concept in q_lower and ("what is" in q_lower or "explain" in q_lower or "mean" in q_lower or "standard" in q_lower or "advice" in q_lower):
-            # Check if we have contract specific chunks
             matching_clause = None
             if relevant_chunks:
                 for c in relevant_chunks:
@@ -154,7 +247,8 @@ def heuristic_chat_response(question: str, contract_meta: dict, relevant_chunks:
             answer = f"### Legal Context: {concept.title()}\n\n{explanation}{specific_note}"
             return {
                 "answer": answer,
-                "citations": citations
+                "citations": citations,
+                "sources": sources
             }
 
     # 3. Contract-specific factual matching
@@ -220,11 +314,12 @@ def heuristic_chat_response(question: str, contract_meta: dict, relevant_chunks:
         summary_text = f"\n\n**Contract Overview:** {summary}" if summary else ""
         answer = (
             f"### Contract Information\n\n"
-            f"I reviewed **{contract_name}** for your query, but could not find a specific dedicated clause matching this exact detail in the extracted text.{summary_text}\n\n"
+            f"I reviewed **{contract_name}** for your query, but this information could not be found in the contract.{summary_text}\n\n"
             f"Feel free to ask about payment terms, renewal dates, termination requirements, or risk assessments."
         )
 
     return {
         "answer": answer,
-        "citations": citations
+        "citations": citations,
+        "sources": sources
     }

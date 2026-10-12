@@ -3,6 +3,40 @@ import { contracts as fallbackContracts } from "./contracts";
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
 
+export function getAuthToken(): string | null {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("contractiq-token");
+  }
+  return null;
+}
+
+export function getAuthHeaders(headers: Record<string, string> = {}): Record<string, string> {
+  const token = getAuthToken();
+  if (token) {
+    return { ...headers, Authorization: `Bearer ${token}` };
+  }
+  return headers;
+}
+
+export async function loginUser(email: string, password: string) {
+
+  const res = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Invalid email or password");
+  }
+  const data = await res.json();
+  if (typeof window !== "undefined") {
+    localStorage.setItem("contractiq-token", data.access_token);
+    localStorage.setItem("contractiq-user", JSON.stringify(data.user));
+  }
+  return data;
+}
+
 export async function fetchContracts(params?: { status?: string; risk?: string; search?: string }): Promise<ContractRecord[]> {
   try {
     const url = new URL(`${API_BASE_URL}/contracts`);
@@ -10,7 +44,10 @@ export async function fetchContracts(params?: { status?: string; risk?: string; 
     if (params?.risk && params.risk !== "All") url.searchParams.append("risk", params.risk);
     if (params?.search) url.searchParams.append("search", params.search);
 
-    const res = await fetch(url.toString(), { cache: "no-store" });
+    const res = await fetch(url.toString(), {
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    });
     if (!res.ok) throw new Error("Failed to fetch contracts");
     return await res.json();
   } catch (err) {
@@ -21,7 +58,10 @@ export async function fetchContracts(params?: { status?: string; risk?: string; 
 
 export async function fetchContractById(id: string): Promise<ContractRecord | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/contracts/${id}`, { cache: "no-store" });
+    const res = await fetch(`${API_BASE_URL}/contracts/${id}`, {
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    });
     if (!res.ok) throw new Error("Contract not found");
     return await res.json();
   } catch (err) {
@@ -51,6 +91,7 @@ export class ContractUploadError extends Error {
 export async function uploadContractFile(formData: FormData): Promise<ContractRecord> {
   const res = await fetch(`${API_BASE_URL}/contracts/upload`, {
     method: "POST",
+    headers: getAuthHeaders(),
     body: formData,
   });
   if (!res.ok) {
@@ -69,10 +110,29 @@ export async function uploadContractFile(formData: FormData): Promise<ContractRe
   return await res.json();
 }
 
-export async function sendChatMessage(contractId: string, message: string): Promise<{ id: string; role: "assistant"; text: string; citations?: string[] }> {
+export interface SourceItem {
+  contract_id: string;
+  document_name: string;
+  chunk_id: number;
+  page_number?: number | null;
+  section?: string | null;
+  excerpt: string;
+  file_url?: string | null;
+}
+
+export async function sendChatMessage(
+  contractId: string,
+  message: string
+): Promise<{
+  id: string;
+  role: "assistant";
+  text: string;
+  citations?: string[];
+  sources?: SourceItem[];
+}> {
   const res = await fetch(`${API_BASE_URL}/contracts/${contractId}/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: getAuthHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ message }),
   });
   if (!res.ok) {
@@ -83,7 +143,10 @@ export async function sendChatMessage(contractId: string, message: string): Prom
 
 export async function fetchDashboardSummary() {
   try {
-    const res = await fetch(`${API_BASE_URL}/dashboard`, { cache: "no-store" });
+    const res = await fetch(`${API_BASE_URL}/dashboard`, {
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    });
     if (!res.ok) throw new Error("Failed to fetch dashboard");
     return await res.json();
   } catch (err) {
@@ -94,7 +157,10 @@ export async function fetchDashboardSummary() {
 
 export async function fetchNotifications() {
   try {
-    const res = await fetch(`${API_BASE_URL}/notifications`, { cache: "no-store" });
+    const res = await fetch(`${API_BASE_URL}/notifications`, {
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    });
     if (!res.ok) throw new Error("Failed to fetch notifications");
     return await res.json();
   } catch (err) {

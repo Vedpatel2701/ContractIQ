@@ -13,15 +13,51 @@ GEMINI_MODELS = [
 
 # Explicit non-contract patterns for deterministic detection
 NON_CONTRACT_PATTERNS = [
-    (r"(certificate of (?:completion|achievement|appreciation|merit|attendance|participation|excellence))", "Certificate of Completion/Achievement"),
-    (r"(scholarship certificate|scholarship award|scholarship program|merit scholarship)", "Scholarship Certificate"),
-    (r"(academic transcript|grade sheet|marksheet|statement of marks|controller of examinations|board of secondary|semester grade point|sgpa|cgpa)", "Academic Marksheet / Transcript"),
-    (r"(degree of|diploma in|bachelor of|master of|doctor of philosophy|dean of academic affairs|provisional certificate)", "Degree / Diploma Certificate"),
-    (r"(curriculum vitae|resume\b|work experience\b|educational qualifications|skills & abilities|career objective|professional summary)", "Resume / Curriculum Vitae"),
-    (r"(tax invoice|receipt no|bill to:|ship to:|subtotal:|gstin:|invoice date:|cash receipt)", "Invoice / Receipt"),
-    (r"(driver'?s license|identity card|passport no|aadhaar|voter id|national id card)", "Identity Card / Government ID"),
-    (r"(recipe|ingredients:|cook time:|servings:|tablespoons|preheat oven)", "Recipe / Food Guide"),
-    (r"(match report|premier league|cricket score|championship final|goals scored|tournament standings)", "Sports / Entertainment Article"),
+    (
+        r"(certificate of (?:completion|achievement|appreciation|merit|attendance|participation|excellence|recognition))",
+        "Certificate of Completion/Achievement",
+        "This document appears to be an academic or completion certificate. It acknowledges an achievement but does not establish a contractual agreement between parties."
+    ),
+    (
+        r"(scholarship certificate|scholarship award|scholarship program|merit scholarship)",
+        "Academic Scholarship Certificate",
+        "This document appears to be an academic scholarship certificate. It describes a scholarship award but does not establish a contractual agreement between parties."
+    ),
+    (
+        r"(academic transcript|grade sheet|marksheet|statement of marks|controller of examinations|board of secondary|semester grade point|sgpa|cgpa)",
+        "Academic Marksheet / Transcript",
+        "This document appears to be an academic marksheet or transcript. It lists academic grades and scores but does not contain contractual covenants or obligations."
+    ),
+    (
+        r"(degree of|diploma in|bachelor of|master of|doctor of philosophy|dean of academic affairs|provisional certificate)",
+        "Degree / Diploma Certificate",
+        "This document appears to be an academic degree or diploma certificate. It certifies educational qualification but is not a commercial or legal agreement."
+    ),
+    (
+        r"(curriculum vitae|resume\b|work experience\b|educational qualifications|skills & abilities|career objective|professional summary)",
+        "Resume / Curriculum Vitae",
+        "This document appears to be a resume or curriculum vitae. It outlines personal qualifications and work history but does not constitute a legally binding contract."
+    ),
+    (
+        r"(tax invoice|receipt no|bill to:|ship to:|subtotal:|gstin:|invoice date:|cash receipt)",
+        "Invoice / Financial Receipt",
+        "This document appears to be a financial invoice or receipt. While it lists transaction figures, it lacks bilateral legal covenants and contractual structure."
+    ),
+    (
+        r"(driver'?s license|identity card|passport no|aadhaar|voter id|national id card)",
+        "Government Identity Card",
+        "This document appears to be a government identity card or identification document. It is not a commercial agreement or legal contract."
+    ),
+    (
+        r"(recipe|ingredients:|cook time:|servings:|tablespoons|preheat oven)",
+        "Recipe / Food Guide",
+        "This document appears to be a food recipe or culinary guide. It does not contain legal terms or commercial agreements."
+    ),
+    (
+        r"(match report|premier league|cricket score|championship final|goals scored|tournament standings)",
+        "Sports / Entertainment Article",
+        "This document appears to be a sports or news article. It has no legal applicability or contractual provisions."
+    ),
 ]
 
 # Hallmark categories for legal contracts
@@ -87,14 +123,14 @@ You are ContractIQ's Legal Document Verification Engine.
 Analyze the following text sample to determine whether it is a legally binding contract, agreement, or memorandum.
 
 ELIGIBLE CONTRACT TYPES:
-Non-Disclosure Agreement (NDA), Master Services Agreement (MSA), Employment Agreement, Consulting Contract, Software License / SaaS Agreement, Lease/Rental Agreement, Vendor/Procurement Contract, Statement of Work (SOW), Service Level Agreement (SLA), Memorandum of Understanding (MOU), Partnership Deed, Commercial Terms of Service, Legal Addendum/Amendment.
+Non-Disclosure Agreement (NDA), Master Services Agreement (MSA), Employment Agreement, Consulting Contract, Software License / SaaS Agreement, Lease/Rental Agreement, Vendor/Procurement Contract, Statement of Work (SOW), Service Level Agreement (SLA), Memorandum of Understanding (MOU), Partnership Deed, Commercial Terms of Service, Legal Addendum/Amendment, Purchase Agreement.
 
 STRICT NON-CONTRACT TYPES (MUST REJECT):
 Academic Marksheets, Transcripts, Degree/Diploma Certificates, Scholarship/Merit Awards, Resumes/CVs, Financial Invoices/Receipts without contract covenants, Personal IDs, News Articles, Essays/Academic Papers, Meeting Notes, Food Recipes, Sports Reports.
 
 RULES:
 1. If the document is a genuine contract/agreement, set "is_contract": true, identify the specific "detected_type", and in "reason" explain why it is accepted based on its legal terms, identified parties, and binding covenants.
-2. If the document is a non-contract or fake agreement, set "is_contract": false, identify the specific "detected_type" (e.g. "Academic Marksheet / Transcript", "Merit Certificate", "Curriculum Vitae", "General Essay"), and in "reason" give a specific diagnostic explanation of what it actually is and which essential contractual elements are missing (e.g., lacks bilateral covenants, consideration, execution terms, or mutual legal obligations).
+2. If the document is a non-contract or fake agreement, set "is_contract": false, identify the specific "detected_type" (e.g. "Academic Scholarship Certificate", "Academic Marksheet / Transcript", "Curriculum Vitae", "Invoice / Financial Receipt"), and in "reason" give a concise, document-specific diagnostic explanation of what it actually is and why it is not a contract (e.g., "This document appears to be an academic scholarship certificate. It describes a scholarship award but does not establish a contractual agreement between parties.").
 3. List present and missing legal elements in "present_elements" and "missing_elements".
 
 Return ONLY valid JSON with this exact schema:
@@ -140,7 +176,7 @@ def heuristic_document_classification(text: str) -> Dict[str, Any]:
     lower_text = text.lower()
 
     # 1. Check for explicit non-contract matches
-    for pattern, doc_type in NON_CONTRACT_PATTERNS:
+    for pattern, doc_type, custom_reason in NON_CONTRACT_PATTERNS:
         if re.search(pattern, lower_text):
             missing = [
                 "Bilateral legal obligations & covenants",
@@ -151,7 +187,7 @@ def heuristic_document_classification(text: str) -> Dict[str, Any]:
             return {
                 "is_contract": False,
                 "detected_type": doc_type,
-                "reason": f"Detected characteristics of a {doc_type}. ContractIQ only accepts legally binding contracts, commercial agreements, NDAs, and memorandums with enforceable obligations between parties.",
+                "reason": custom_reason,
                 "missing_elements": missing,
                 "present_elements": [f"Header/content indicative of {doc_type}"],
                 "confidence": 0.95

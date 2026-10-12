@@ -70,7 +70,7 @@ export default function ContractsDirectoryPage() {
       />
 
       {/* Search & Filters Toolbar */}
-      <div className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 sm:flex-row sm:items-center sm:justify-between shadow-[var(--shadow-card)]">
         {/* Search Bar */}
         <div className="relative flex-1 max-w-md">
           <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--text-muted)]">
@@ -83,7 +83,7 @@ export default function ContractsDirectoryPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by contract name, company, or ID..."
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2 pl-9 pr-3 text-sm text-[var(--foreground)] placeholder-[var(--text-muted)] focus:border-blue-600 focus:outline-none"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2 pl-9 pr-3 text-sm text-[var(--foreground)] placeholder:text-[var(--text-muted)] focus:border-blue-600 focus:outline-none"
           />
         </div>
 
@@ -94,7 +94,7 @@ export default function ContractsDirectoryPage() {
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as (typeof statusOptions)[number])}
-              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-medium text-[var(--foreground)] focus:outline-none"
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--foreground)] focus:outline-none"
             >
               {statusOptions.map((opt) => (
                 <option key={opt} value={opt}>
@@ -109,7 +109,7 @@ export default function ContractsDirectoryPage() {
             <select
               value={risk}
               onChange={(e) => setRisk(e.target.value as (typeof riskOptions)[number])}
-              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-medium text-[var(--foreground)] focus:outline-none"
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--foreground)] focus:outline-none"
             >
               {riskOptions.map((opt) => (
                 <option key={opt} value={opt}>
@@ -159,14 +159,14 @@ export default function ContractsDirectoryPage() {
             {filteredContracts.map((contract) => (
               <div
                 key={contract.id}
-                className="flex flex-col gap-4 p-5 transition-colors hover:bg-[var(--surface-muted)] sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-3 p-4 transition-colors hover:bg-[var(--surface-muted)] sm:flex-row sm:items-center sm:justify-between"
               >
                 {/* Left: Info */}
-                <div className="space-y-1.5">
-                  <div className="flex flex-wrap items-center gap-2">
+                <div className="space-y-1 min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2.5">
                     <Link
                       href={`/dashboard/contracts/${contract.id}`}
-                      className="text-base font-bold text-[var(--foreground)] hover:text-blue-600 dark:hover:text-blue-400"
+                      className="text-sm font-semibold text-[var(--foreground)] hover:text-blue-600 dark:hover:text-blue-400"
                     >
                       {contract.name}
                     </Link>
@@ -174,28 +174,31 @@ export default function ContractsDirectoryPage() {
                     <RiskBadge risk={contract.riskLevel} />
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-secondary)]">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
                     <span className="font-medium text-[var(--foreground)]">{contract.company}</span>
                     <span>•</span>
-                    <span>{contract.contractType}</span>
-                    <span>•</span>
-                    <span>Renewal: {contract.renewalDate || "Not specified"}</span>
-                    <span>•</span>
-                    <span className="font-mono text-[11px]">ID: {contract.id}</span>
+                    <span className="font-mono text-[11px] text-[var(--text-muted)]">{contract.id}</span>
+                    {contract.renewalDate && (
+                      <>
+                        <span>•</span>
+                        <span className="text-blue-600 dark:text-blue-400">Renewal: {contract.renewalDate}</span>
+                      </>
+                    )}
                   </div>
                 </div>
 
                 {/* Right: Actions */}
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 items-center gap-3">
                   <Link
-                    href={`/dashboard/contracts/${contract.id}/chat`}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/60 dark:text-blue-300"
+                    href={`/dashboard/assistant?contractId=${contract.id}`}
+                    title="Ask Contract Assistant"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-[var(--text-secondary)] hover:text-blue-600 dark:hover:text-blue-400"
                   >
-                    <span>💬</span> Ask Assistant
+                    <span>💬</span> Assistant
                   </Link>
                   <Link
                     href={`/dashboard/contracts/${contract.id}`}
-                    className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--surface-strong)]"
+                    className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--foreground)] hover:bg-[var(--surface-muted)] transition"
                   >
                     View Details →
                   </Link>

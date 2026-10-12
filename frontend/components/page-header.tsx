@@ -24,7 +24,7 @@ export function PageHeader({
         <div className="mb-3">
           <Link
             href={backHref}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:text-blue-600 dark:hover:text-blue-400"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--accent)]"
           >
             <span>←</span> {backLabel}
           </Link>
@@ -33,11 +33,11 @@ export function PageHeader({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="max-w-3xl space-y-1">
           {eyebrow && (
-            <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
               {eyebrow}
             </p>
           )}
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--foreground)] sm:text-3xl">
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)] sm:text-3xl">
             {title}
           </h1>
           {description && (

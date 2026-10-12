@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Text, DateTime
+from sqlalchemy import Column, String, Text, DateTime, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -11,6 +11,7 @@ class Contract(Base):
     __tablename__ = "contracts"
 
     id = Column(String, primary_key=True, default=generate_id)
+    owner_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     name = Column(String, nullable=False, index=True)
     contract_type = Column(String, default="Commercial Agreement")
     company = Column(String, nullable=False, index=True)
@@ -22,8 +23,11 @@ class Contract(Base):
     renewal_date = Column(String, nullable=True)
     notice_period = Column(String, nullable=True)
     payment_terms = Column(Text, nullable=True)
+    payment_status = Column(String, default="Paid", index=True) # Paid, Payment Due Soon, Payment Overdue, Not Applicable, Not Specified
     penalty_info = Column(Text, nullable=True)
     summary = Column(Text, nullable=True)
+    
+    is_demo = Column(Boolean, default=False, index=True)
     
     # Party details
     customer = Column(String, nullable=True)
@@ -41,7 +45,10 @@ class Contract(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
+    owner = relationship("User")
     clauses = relationship("Clause", back_populates="contract", cascade="all, delete-orphan")
     risk_indicators = relationship("RiskIndicator", back_populates="contract", cascade="all, delete-orphan")
     chat_messages = relationship("ChatMessage", back_populates="contract", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="contract", cascade="all, delete-orphan")
+    chunks = relationship("ContractChunk", back_populates="contract", cascade="all, delete-orphan")
+

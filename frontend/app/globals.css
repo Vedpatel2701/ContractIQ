@@ -1,8 +1,16 @@
 @import "tailwindcss";
+@source "..";
 
-@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+@variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Enforce smooth typography */
+button, a {
+  -webkit-font-smoothing: antialiased;
+}
 
 :root {
+  color-scheme: light;
+  /* Light Theme — Premium Enterprise Navy & Slate */
   --background: #f8fafc;
   --foreground: #0f172a;
   --surface: #ffffff;
@@ -10,45 +18,38 @@
   --surface-muted: #f1f5f9;
   --surface-strong: #e2e8f0;
   --border: #e2e8f0;
-  --border-subtle: #f1f5f9;
+  --border-subtle: #f8fafc;
   --border-strong: #cbd5e1;
-  
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #64748b;
-  
-  /* Primary LegalTech Corporate Blue */
   --primary: #1e3a8a;
   --primary-hover: #1e40af;
   --primary-fg: #ffffff;
-  
-  /* Accent Sapphire */
   --accent: #2563eb;
   --accent-soft: #eff6ff;
+  --accent-border: #bfdbfe;
   --accent-hover: #1d4ed8;
-  
-  /* Status Colors */
   --success: #16a34a;
   --success-bg: #f0fdf4;
   --success-border: #bbf7d0;
   --success-text: #15803d;
-  
   --warning: #d97706;
   --warning-bg: #fffbeb;
   --warning-border: #fde68a;
   --warning-text: #b45309;
-  
   --danger: #dc2626;
   --danger-bg: #fef2f2;
   --danger-border: #fecaca;
   --danger-text: #b91c1c;
-
   --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
   --shadow-card: 0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.08);
   --shadow-elevated: 0 10px 15px -3px rgba(15, 23, 42, 0.06), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
 }
 
 :root[data-theme="dark"] {
+  color-scheme: dark;
+  /* Dark Theme — Deep Slate Navy & High-Contrast Blue */
   --background: #090e17;
   --foreground: #f1f5f9;
   --surface: #0f172a;
@@ -58,34 +59,28 @@
   --border: #1e293b;
   --border-subtle: #162032;
   --border-strong: #334155;
-  
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
-  
   --primary: #3b82f6;
   --primary-hover: #60a5fa;
-  --primary-fg: #090e17;
-  
+  --primary-fg: #ffffff;
   --accent: #3b82f6;
-  --accent-soft: rgba(59, 130, 246, 0.12);
+  --accent-soft: rgba(59, 130, 246, 0.15);
+  --accent-border: #2563eb;
   --accent-hover: #60a5fa;
-  
   --success: #22c55e;
-  --success-bg: rgba(34, 197, 94, 0.12);
-  --success-border: rgba(34, 197, 94, 0.25);
+  --success-bg: rgba(34, 197, 94, 0.15);
+  --success-border: rgba(34, 197, 94, 0.3);
   --success-text: #4ade80;
-  
   --warning: #f59e0b;
-  --warning-bg: rgba(245, 158, 11, 0.12);
-  --warning-border: rgba(245, 158, 11, 0.25);
+  --warning-bg: rgba(245, 158, 11, 0.15);
+  --warning-border: rgba(245, 158, 11, 0.3);
   --warning-text: #fbbf24;
-  
   --danger: #ef4444;
-  --danger-bg: rgba(239, 68, 68, 0.12);
-  --danger-border: rgba(239, 68, 68, 0.25);
+  --danger-bg: rgba(239, 68, 68, 0.15);
+  --danger-border: rgba(239, 68, 68, 0.3);
   --danger-text: #f87171;
-
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
   --shadow-elevated: 0 10px 20px -3px rgba(0, 0, 0, 0.5);
@@ -110,8 +105,9 @@ body {
   min-height: 100vh;
   background: var(--background);
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a {
@@ -128,3 +124,19 @@ a {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+input, select, textarea {
+  color: var(--foreground);
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--text-muted);
+}
+
+@media (max-width: 640px) {
+  main {
+    min-width: 0;
+  }
+}
+
+

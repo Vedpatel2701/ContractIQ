@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     # Database: Supports PostgreSQL or fallback to SQLite
     DATABASE_URL: str = f"sqlite:///{BASE_DIR / 'contractiq.db'}"
     
+    # Security & Authentication
+    SECRET_KEY: str = "contractiq-super-secret-jwt-key-2026-production-secure"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 # 24 hours
+
     # CORS
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
