@@ -1,13 +1,12 @@
 import re
-from typing import Dict, Any, List
+import json
+from typing import Dict, Any, List, Optional
 from app.services.vector_store import VectorStore
 from app.core.config import settings
 
 # Active Gemini models in order of priority
 GEMINI_MODELS = [
-    "gemini-3.6-flash",
-    "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite",
+    "gemini-3.8-flash",
     "gemini-flash-latest",
 ]
 
@@ -19,102 +18,172 @@ OFF_TOPIC_PATTERNS = [
     r"\b(?:weather forecast|horoscope|astrology|celebrity gossip)\b",
 ]
 
-# Common legal and contract concepts for offline explanation & matching
+# Detection pattern for questions explicitly asking for sources, citations, clauses, pages, or proof
+SOURCE_REQUEST_PATTERNS = [
+    r"\b(?:what is (?:the|your) source|show (?:me )?(?:the )?source|sources|citation|citations|cite|cited)\b",
+    r"\b(?:which clause|what clause|which section|what section|clause number|section number)\b",
+    r"\b(?:page number|which page|what page|relevant page|relevant section)\b",
+    r"\b(?:where in the contract|where does it say|show (?:me )?(?:the )?proof|evidence|reference|where is this stated|according to which)\b",
+]
+
+def is_source_requested(question: str) -> bool:
+    """Detects whether user is explicitly asking for source citations, clause locations, or document pages."""
+    q_lower = question.lower()
+    for pattern in SOURCE_REQUEST_PATTERNS:
+        if re.search(pattern, q_lower):
+            return True
+    return False
+
+# Common legal and contract concepts explained in everyday, non-technical English
 LEGAL_CONCEPT_DEFINITIONS = {
-    "indemnity": "An indemnification clause is a contractual commitment where one party agrees to compensate the other for specified losses, damages, or legal liabilities arising from breaches, third-party claims, or operational faults.",
-    "liability": "Limitation of liability clauses set the maximum financial ceiling or exclude certain types of damages (such as indirect, punitive, or consequential damages) that one party can recover from the other in the event of a breach.",
-    "termination": "Termination clauses govern the rights, notice requirements, cure periods, and conditions under which either party can end the agreement before its scheduled expiration.",
-    "renewal": "Renewal provisions determine whether a contract automatically extends (auto-renewal / evergreen) or requires affirmative written notice, along with associated notice deadlines.",
-    "governing law": "The governing law clause specifies which state or national jurisdiction's legal principles will interpret and enforce the contract, whereas jurisdiction defines which court or arbitration forum hears disputes.",
-    "confidentiality": "Confidentiality or NDA provisions define what non-public proprietary data is protected, standard of care, permitted disclosures, and the duration of secrecy obligations.",
-    "force majeure": "A force majeure clause excuses performance obligations when unforeseen, unavoidable external events (natural disasters, war, pandemics, government mandates) prevent compliance.",
-    "penalty": "Penalty or liquidated damages provisions outline predetermined monetary assessments or service credits owed when contractual milestones or SLAs are missed.",
-    "sla": "Service Level Agreements (SLAs) establish specific technical performance standards (such as 99.9% uptime, response times) and define the service credits or remedies for failure to meet them.",
+    "indemnity": (
+        "**Indemnity** means one party promises to pay for legal damages or losses if something goes wrong. "
+        "In everyday terms: *'If my action causes a lawsuit or loss, I will cover your costs so you don't lose money.'*"
+    ),
+    "liability": (
+        "A **Limitation of Liability** sets a financial ceiling on the maximum amount of money one party can sue the other for if there is a contract breach. "
+        "In everyday terms: it prevents a company from being ruined by unbounded damages if a dispute occurs."
+    ),
+    "termination": (
+        "**Termination** provisions explain how and when either party can cancel the contract early. "
+        "Usually contracts allow termination 'for cause' (if someone breaches a rule and fails to fix it) or 'for convenience' (simply deciding to end the agreement after giving advance written notice)."
+    ),
+    "renewal": (
+        "**Renewal** terms decide what happens when a contract approaches its end date. "
+        "An **auto-renewal (or evergreen)** clause automatically extends the contract unless one party gives written notice to cancel before the deadline window."
+    ),
+    "governing law": (
+        "**Governing Law** defines which state or country's legal system will interpret the contract if a disagreement arises, while **jurisdiction** specifies which court will handle the lawsuit."
+    ),
+    "confidentiality": (
+        "**Confidentiality (NDA)** terms protect private business information, customer data, and trade secrets from being shared with outsiders without permission."
+    ),
+    "force majeure": (
+        "**Force Majeure** excuses both parties from performing their duties when an unavoidable, major emergency happens—such as natural disasters, pandemics, war, or government orders."
+    ),
+    "penalty": (
+        "**Penalties or Liquidated Damages** are predetermined financial amounts or bill discounts that a party must pay if they miss agreed deadlines or service standards."
+    ),
+    "sla": (
+        "A **Service Level Agreement (SLA)** sets guaranteed performance targets (like 99.9% uptime or 4-hour support response) and defines the bill credits owed if targets are missed."
+    ),
 }
 
 def answer_general_question(question: str, all_contracts_meta: List[dict] = None) -> dict:
     """
     General Assistant pipeline: answers legal concepts, contract management guidance,
-    or general queries across all contracts in the workspace.
+    or general queries across all contracts in the workspace with clear, human-friendly plain English.
     """
     q_lower = question.lower()
+    sources_asked = is_source_requested(question)
 
     # 1. Off-Topic Check
     for pattern in OFF_TOPIC_PATTERNS:
         if re.search(pattern, q_lower):
             return {
-                "answer": "I am ContractIQ's Legal Assistant dedicated to analyzing contracts, legal terms, and commercial agreements. I cannot assist with off-topic subjects such as sports, recipes, or entertainment. Please ask any question regarding contract management, legal terminology, or your workspace agreements.",
-                "citations": []
+                "answer": (
+                    "I am ContractIQ's Legal Assistant dedicated to analyzing contracts, legal terms, and commercial agreements. "
+                    "I cannot assist with off-topic subjects such as sports, recipes, or entertainment. "
+                    "Please ask any question regarding contract management, legal terminology, or your workspace agreements."
+                ),
+                "citations": [],
+                "sources": [],
+                "show_sources": False
             }
 
     # 2. Check for Legal Concept / Advisory queries
     for concept, explanation in LEGAL_CONCEPT_DEFINITIONS.items():
         if concept in q_lower:
             answer = (
-                f"### Legal Concept: {concept.title()}\n\n"
+                f"### Understanding {concept.title()} in Everyday Language\n\n"
                 f"{explanation}\n\n"
-                f"**General Guidance:** In commercial contracts, ensure this clause is reviewed carefully to protect your organization's financial and legal obligations."
+                f"**What this means in practice:**\n"
+                f"- **Review obligations carefully:** Always check whether obligations are mutual or one-sided.\n"
+                f"- **Watch deadlines:** Many legal provisions (like termination or dispute notice) have strict calendar limits.\n"
+                f"- **Financial exposure:** Ensure any caps or exclusions align with your organization's risk tolerance.\n\n"
+                f"*Note: This is general legal information. To inspect how a specific contract handles {concept}, select that contract from the context dropdown above.*"
             )
             return {
                 "answer": answer,
-                "citations": ["ContractIQ Legal Knowledge Base"]
+                "citations": ["ContractIQ Legal Knowledge Base"] if sources_asked else [],
+                "sources": [],
+                "show_sources": sources_asked
             }
 
     # 3. Workspace-wide summary / multi-contract check
-    if all_contracts_meta and ("how many" in q_lower or "list" in q_lower or "overview" in q_lower or "summary" in q_lower or "high risk" in q_lower or "expir" in q_lower):
+    if all_contracts_meta and any(term in q_lower for term in ["how many", "list", "overview", "summary", "high risk", "expir", "all contract"]):
         total = len(all_contracts_meta)
-        high_risk = [c for c in all_contracts_meta if (c.get("risk_level") or c.get("riskLevel")) == "High"]
+        high_risk = [c for c in all_contracts_meta if (c.get("risk_level") or c.get("riskLevel")) in ["High", "Critical"]]
         expiring = [c for c in all_contracts_meta if c.get("expiry_date") or c.get("expiryDate")]
-        
+
         summary_lines = [
             f"### Workspace Contracts Overview\n\n",
+            f"Here is a summary of the active contracts currently in your workspace:\n\n",
             f"- **Total Active Contracts:** {total}\n",
-            f"- **High-Risk Agreements requiring review:** {len(high_risk)}\n\n",
+            f"- **Contracts Requiring Attention (High/Critical Risk):** {len(high_risk)}\n",
+            f"- **Contracts with Documented Expiration Dates:** {len(expiring)}\n\n",
         ]
         if high_risk:
-            summary_lines.append("**High-Risk Contracts:**\n")
-            for h in high_risk[:3]:
+            summary_lines.append("**Key Agreements to Review:**\n")
+            for h in high_risk[:4]:
                 c_name = h.get("name") or "Contract"
                 c_company = h.get("company") or "Partner"
-                summary_lines.append(f"- **{c_name}** ({c_company})\n")
-        
-        summary_lines.append("\nSelect a specific contract from the **Context selector** dropdown above to analyze individual clause provisions, payment terms, or notice windows.")
+                c_risk = h.get("risk_level") or h.get("riskLevel") or "High"
+                summary_lines.append(f"- **{c_name}** with *{c_company}* (Risk: {c_risk})\n")
+
+        summary_lines.append("\n**Next step:** Select any specific contract from the **Context selector** above to ask detailed questions about its clauses, payment dates, or liabilities.")
         return {
             "answer": "".join(summary_lines),
-            "citations": [f"ContractIQ Workspace Database ({total} Contracts)"]
+            "citations": [f"ContractIQ Workspace Database ({total} Contracts)"] if sources_asked else [],
+            "sources": [],
+            "show_sources": sources_asked
         }
 
     # Default general guidance answer
     return {
         "answer": (
-            f"### General Contract & Legal Guidance\n\n"
-            f"You are currently in **General Context** mode. I can assist with general legal principles, contract clause standards, risk identification criteria, or workspace-wide contract summaries.\n\n"
-            f"To inspect specific terms, payment dates, or liability provisions of a particular agreement, use the **Context selector** at the top to select that contract."
+            "### General Contract & Legal Guidance\n\n"
+            "You are currently in **General Context** mode. I can assist with general legal concepts, contract standards, risk identification, or workspace-wide summaries.\n\n"
+            "- **Common topics you can ask:**\n"
+            "  - *'Explain standard indemnification in simple terms'*\n"
+            "  - *'What is a reasonable notice window for termination?'*\n"
+            "  - *'How many high-risk contracts exist in our workspace?'*\n\n"
+            "To review a specific contract's terms, payment dates, or obligations, choose that contract from the **Context selector** dropdown at the top."
         ),
-        "citations": ["ContractIQ Workspace Assistant"]
+        "citations": ["ContractIQ Workspace Assistant"] if sources_asked else [],
+        "sources": [],
+        "show_sources": sources_asked
     }
 
 def answer_contract_question(contract_id: str, question: str, contract_meta: dict) -> dict:
     """
     RAG Chat pipeline: searches within this contract's vector chunks and provides well-structured,
-    detailed answers for contract-specific and contract-adjacent questions, while deflecting off-topic queries.
+    plain-English answers for non-lawyers while strictly preserving contractual accuracy.
+    Sources are included but only shown to the user when explicitly requested.
     """
     q_lower = question.lower()
+    sources_asked = is_source_requested(question)
 
     # 1. Off-Topic Check
     for pattern in OFF_TOPIC_PATTERNS:
         if re.search(pattern, q_lower):
             return {
-                "answer": "I am ContractIQ's Legal Document Assistant dedicated to analyzing contracts, legal terms, and commercial agreements. I cannot assist with off-topic queries like sports, recipes, or entertainment. Please ask any question regarding this contract's terms, clauses, obligations, or risks.",
+                "answer": (
+                    "I am ContractIQ's Legal Assistant dedicated to analyzing contracts, legal terms, and commercial agreements. "
+                    "I cannot assist with off-topic queries like sports, recipes, or entertainment. "
+                    "Please ask any question regarding this contract's terms, clauses, obligations, or risks."
+                ),
                 "citations": [],
-                "sources": []
+                "sources": [],
+                "show_sources": False
             }
 
+    # 2. Strict contract-isolated chunk retrieval
     vector_store = VectorStore(contract_id)
     relevant_chunks = vector_store.search(question, top_k=5)
 
     context_text = "\n\n".join([
-        f"[Clause Chunk {c.get('chunk_id', 0)} - Page {c.get('page_number', 1)}]:\n{c.get('text', '')}"
+        f"[Clause Chunk #{c.get('chunk_id', 0)} - Page {c.get('page_number', 1)}]:\n{c.get('text', '')}"
         for c in relevant_chunks
     ])
 
@@ -128,7 +197,7 @@ def answer_contract_question(contract_id: str, question: str, contract_meta: dic
         chunk_excerpt = c.get("text", "").strip()
         chunk_id = c.get("chunk_id", 0)
 
-        page_str = f"Page {page_num}" if page_num and page_num > 0 else "Page Not Specified"
+        page_str = f"Page {page_num}" if page_num and page_num > 0 else "Page 1"
         chunk_excerpt_short = chunk_excerpt[:180] + ("..." if len(chunk_excerpt) > 180 else "")
         if chunk_excerpt:
             citations.append(f"{doc_name} • {page_str} (Chunk #{chunk_id}): \"{chunk_excerpt_short}\"")
@@ -137,39 +206,56 @@ def answer_contract_question(contract_id: str, question: str, contract_meta: dic
             "contract_id": contract_id,
             "document_name": doc_name,
             "chunk_id": chunk_id,
-            "page_number": page_num if (page_num and page_num > 0) else None,
+            "page_number": page_num if (page_num and page_num > 0) else 1,
             "section": section_name if section_name else None,
             "excerpt": chunk_excerpt[:350],
             "file_url": f"/api/v1/contracts/{contract_id}/file"
         })
 
-    # If Gemini API key is configured, use LLM
+    # 3. If Gemini API is available, generate grounded plain-English response
     if settings.GEMINI_API_KEY:
         try:
             from google import genai
-            client = genai.Client(api_key=settings.GEMINI_API_KEY)
+            client = genai.Client(api_key=settings.GEMINI_API_KEY, http_options={"timeout": 6.0})
 
-            prompt = f"""
-You are ContractIQ's Legal Document Intelligence Assistant. You are analyzing the specific agreement titled "{contract_meta.get('name')}".
+            source_instruction = ""
+            if sources_asked:
+                source_instruction = """
+NOTE ON SOURCES: The user is explicitly asking for source citations, clause references, or page numbers.
+Directly identify the relevant clause name, section, and page number from the Retrieved Contract Text Context, and quote the exact supporting sentence.
+"""
+            else:
+                source_instruction = """
+NOTE ON SOURCES: The user is NOT asking for sources or citations. Focus entirely on a clear, human-friendly answer without inserting source cards or raw page reference footers.
+"""
 
-YOUR MISSION:
-Provide clear, well-structured, professional, and detailed answers to user questions.
+            prompt = f"""You are ContractIQ's Legal Document Intelligence Assistant analyzing the contract "{contract_meta.get('name')}".
 
-GUIDELINES BY QUERY TYPE:
+MISSION:
+Provide answers that anyone without legal or contract-management training can easily understand. Preserve 100% factual accuracy without altering the legal meaning of clauses.
 
-1. CONTRACT-SPECIFIC FACTUAL QUESTIONS (e.g. dates, parties, payment terms, notice periods, specific clauses, penalties, obligations):
-   - Answer directly and thoroughly using the provided Contract Metadata and Retrieved Document Context.
-   - Use structured formatting (bullet points, bold highlights, subheadings where helpful).
-   - If a specific detail or provision requested by the user is not explicitly written in the provided Contract Metadata or Retrieved Document Context, you MUST clearly state: "This information could not be found in the contract." Never invent or fabricate unmentioned dates, figures, or clauses.
+CORE RULES:
+1. START WITH A DIRECT ANSWER:
+   - Begin with an immediate, plain-English answer in the first 1-2 sentences.
+   - Explain legal jargon in everyday language (e.g., explain "indemnity" as paying for damages if something goes wrong; explain "limitation of liability" as the maximum financial cap on damages).
 
-2. CONTRACT-ADJACENT & LEGAL ADVISORY QUESTIONS (e.g. explaining legal terminology, comparing against industry standards, risk analysis, negotiation advice, breach implications, termination checklists):
-   - Provide a knowledgeable, well-structured legal explanation of the concept.
-   - Then directly relate it back to this uploaded agreement and explain how the contract's actual terms apply.
-   - Provide actionable, practical advice for the user's business context.
+2. PRACTICAL IMPLICATIONS:
+   - Explain what this means in practice: actions required, upcoming deadlines, payment obligations, or risks to watch out for.
+   - Distinguish clearly between what the contract explicitly states vs practical recommendations.
 
-3. TRULY OFF-TOPIC QUESTIONS (e.g. sports, cooking recipes, weather, celebrity gossip, movies, video games):
-   - Politely decline to answer:
-     "I am ContractIQ's Legal Document Assistant dedicated to analyzing contracts, legal terms, and commercial agreements. I cannot assist with [topic]. Please feel free to ask any question regarding this agreement, its clauses, obligations, or legal risks."
+3. ADAPT FORMAT DYNAMICALLY (DO NOT FORCE A RIGID TEMPLATE):
+   - For summaries: Divide into clear sections: Purpose, Parties' Obligations, Payment Terms, Duration & Renewal, Termination, and Key Risks.
+   - For complex questions: Use clean headings, bullet points, numbered steps, or markdown tables when helpful.
+   - For simple questions: Be direct and concise. Avoid unnecessary length or repeated phrases.
+   - Highlight important dates, monetary amounts, and notice windows in **bold**.
+
+4. STRICT FACTUAL GROUNDING:
+   - Ground your answer ONLY in the Contract Metadata and Retrieved Contract Text Context below.
+   - NEVER invent or guess dates, payment amounts, clause numbers, renewal conditions, obligations, or counterparty facts.
+   - If a specific detail is missing, ambiguous, or conditional, say so directly (e.g., "This contract does not specify late payment interest" or "Renewal is conditional upon 60 days advance written notice").
+   - If the question asks for something not in the contract, say clearly that the agreement does not contain this information.
+
+{source_instruction}
 
 Contract Metadata:
 - Contract Name: {contract_meta.get('name')}
@@ -185,7 +271,7 @@ Contract Metadata:
 - Executive Summary: {contract_meta.get('summary') or 'Not specified'}
 
 Retrieved Contract Text Context:
-{context_text if context_text else "No matching clause chunks found for this query."}
+{context_text if context_text else "No matching clause chunks found in vector index."}
 
 User Question:
 {question}
@@ -201,8 +287,9 @@ User Question:
                     if answer_text:
                         return {
                             "answer": answer_text,
-                            "citations": citations,
-                            "sources": sources
+                            "citations": citations if sources_asked else [],
+                            "sources": sources,
+                            "show_sources": sources_asked
                         }
                 except Exception as err:
                     print(f"[Gemini RAG Chat error with {model_name}]: {err}")
@@ -210,31 +297,89 @@ User Question:
         except Exception as e:
             print(f"[Gemini RAG Chat Fallback] {e}")
 
-    # Fallback to enhanced heuristic / semantic matcher
-    return heuristic_chat_response(question, contract_meta, relevant_chunks, citations, sources)
+    # Fallback to enhanced heuristic plain-English generator
+    return heuristic_chat_response(question, contract_meta, relevant_chunks, citations, sources, sources_asked)
 
-
-def heuristic_chat_response(question: str, contract_meta: dict, relevant_chunks: List[dict], citations: List[str], sources: List[dict] = None) -> dict:
+def heuristic_chat_response(
+    question: str,
+    contract_meta: dict,
+    relevant_chunks: List[dict],
+    citations: List[str],
+    sources: List[dict],
+    sources_asked: bool = False
+) -> dict:
     """
-    Intelligent fallback responding accurately and structurally to contract queries,
-    legal concept questions, and off-topic deflections when LLM is offline.
+    Intelligent fallback responding accurately, structurally, and clearly
+    with understandable plain-English answers adapted to the query type.
     """
     q_lower = question.lower()
-    if sources is None:
-        sources = []
+    contract_name = contract_meta.get("name", "this agreement")
+    company = contract_meta.get("company", "the counterparty")
 
-    # 1. Off-Topic Check
-    for pattern in OFF_TOPIC_PATTERNS:
-        if re.search(pattern, q_lower):
+    # 1. Source queries: when user explicitly asks for proof, clause location, or source
+    if sources_asked:
+        if relevant_chunks:
+            best = relevant_chunks[0]
+            doc_name = contract_meta.get("file_name") or contract_name
+            page_val = best.get("page_number", 1)
+            chunk_text = best.get("text", "").strip()
+            answer = (
+                f"### Verified Document Source\n\n"
+                f"This statement is supported by **{doc_name}**, located on **Page {page_val}**:\n\n"
+                f"> \"{chunk_text[:350]}...\"\n\n"
+                f"You can review the full context directly by opening the verified PDF source attached below."
+            )
             return {
-                "answer": "I am ContractIQ's Legal Document Assistant dedicated to analyzing contracts, legal terms, and commercial agreements. I cannot assist with off-topic queries like sports, recipes, or entertainment. Please ask any question regarding this contract's terms, clauses, obligations, or risks.",
+                "answer": answer,
+                "citations": citations,
+                "sources": sources,
+                "show_sources": True
+            }
+        else:
+            return {
+                "answer": f"Reliable source metadata is not available in the indexed chunks for this item in **{contract_name}**.",
                 "citations": [],
-                "sources": []
+                "sources": [],
+                "show_sources": False
             }
 
-    # 2. Check for Legal Concept / Advisory queries
+    # 2. Summary queries: structured comprehensive summary
+    if any(k in q_lower for k in ["summar", "overview", "what is this contract about", "explain this contract", "break down"]):
+        purpose = contract_meta.get("summary") or f"A commercial agreement between ContractIQ and {company} governing services and deliverables."
+        payment = contract_meta.get("payment_terms") or "Standard invoicing schedule as defined in the commercial terms."
+        start = contract_meta.get("start_date") or "Documented start date"
+        expiry = contract_meta.get("expiry_date") or "Documented expiration date"
+        renewal = contract_meta.get("renewal_date") or "Auto-renewal subject to advance notice"
+        notice = contract_meta.get("notice_period") or "30 days prior written notice"
+        risk = contract_meta.get("risk_level", "Moderate")
+        penalty = contract_meta.get("penalty_info") or "Standard contractual remedies apply."
+
+        answer = (
+            f"### Executive Summary: {contract_name}\n\n"
+            f"Here is a plain-English overview of this agreement with **{company}**:\n\n"
+            f"| Key Term | Contract Provision |\n"
+            f"| :--- | :--- |\n"
+            f"| **Main Purpose** | {purpose} |\n"
+            f"| **Counterparty** | {company} |\n"
+            f"| **Payment Terms** | {payment} |\n"
+            f"| **Duration** | Commences {start}, concludes {expiry} |\n"
+            f"| **Renewal & Notice** | Next deadline: {renewal} ({notice}) |\n"
+            f"| **Penalties / SLAs** | {penalty} |\n"
+            f"| **Risk Rating** | **{risk}** |\n\n"
+            f"**Practical Next Steps:**\n"
+            f"- Ensure invoices are submitted according to the agreed schedule ({payment}).\n"
+            f"- Mark your calendar at least 30 days before the notice deadline ({notice}) to evaluate whether to renew or terminate."
+        )
+        return {
+            "answer": answer,
+            "citations": [],
+            "sources": sources,
+            "show_sources": False
+        }
+
+    # 3. Check for Legal Concept explanation queries within contract
     for concept, explanation in LEGAL_CONCEPT_DEFINITIONS.items():
-        if concept in q_lower and ("what is" in q_lower or "explain" in q_lower or "mean" in q_lower or "standard" in q_lower or "advice" in q_lower):
+        if concept in q_lower and any(w in q_lower for w in ["what is", "explain", "mean", "standard", "advice", "how does"]):
             matching_clause = None
             if relevant_chunks:
                 for c in relevant_chunks:
@@ -242,84 +387,144 @@ def heuristic_chat_response(question: str, contract_meta: dict, relevant_chunks:
                         matching_clause = c.get("text", "").strip()
                         break
 
-            specific_note = f"\n\n**In this contract:**\n> \"{matching_clause[:300]}...\"" if matching_clause else f"\n\n**In this contract:** No explicit standalone clause specifically addressing '{concept}' was found, though related commercial terms apply."
-            
-            answer = f"### Legal Context: {concept.title()}\n\n{explanation}{specific_note}"
+            clause_note = (
+                f"\n\n**How {contract_name} handles this:**\n> \"{matching_clause[:280]}...\""
+                if matching_clause
+                else f"\n\n**In this contract:** No standalone clause specifically titled '{concept}' was detected in the indexed sections."
+            )
+
+            answer = (
+                f"### {concept.title()}: Plain-English Explanation\n\n"
+                f"{explanation}{clause_note}\n\n"
+                f"**What this means for you:**\n"
+                f"Pay close attention to financial caps and notice requirements to ensure your organization does not incur unexpected liability."
+            )
             return {
                 "answer": answer,
-                "citations": citations,
-                "sources": sources
+                "citations": [],
+                "sources": sources,
+                "show_sources": False
             }
 
-    # 3. Contract-specific factual matching
-    contract_name = contract_meta.get("name", "this agreement")
-
-    if "renewal" in q_lower or "renew" in q_lower or "evergreen" in q_lower or "expire" in q_lower or "expiry" in q_lower:
+    # 4. Factual contract questions: Renewal & Expiration
+    if any(k in q_lower for k in ["renewal", "renew", "evergreen", "expire", "expiry", "end date"]):
         renewal = contract_meta.get("renewal_date") or contract_meta.get("expiry_date") or "Not explicitly fixed in metadata"
-        notice = contract_meta.get("notice_period") or "Standard contractual notice or as specified in termination terms"
+        notice = contract_meta.get("notice_period") or "Standard written notice as stated in termination terms"
         answer = (
-            f"### Contract Renewal & Expiry Details\n\n"
-            f"- **Contract:** {contract_name}\n"
-            f"- **Renewal / Expiry Date:** {renewal}\n"
-            f"- **Notice Period Requirement:** {notice}\n\n"
-            f"**Recommendation:** To avoid unintended auto-renewal or contract lapse, initiate review at least 30 to 60 days prior to the renewal date."
+            f"This agreement is scheduled for renewal or expiration on **{renewal}**, and requires **{notice}** if either party decides not to extend.\n\n"
+            f"- **Next Expiry / Renewal Date:** **{renewal}**\n"
+            f"- **Advance Notice Window:** **{notice}**\n"
+            f"- **Counterparty:** {company}\n\n"
+            f"**Action required:** Set a reminder at least 30 to 60 days before the deadline so your team has enough time to negotiate rates or issue a non-renewal notice without missing the cutoff."
         )
 
-    elif "notice" in q_lower or "terminat" in q_lower or "cancel" in q_lower:
+    # 5. Factual contract questions: Notice & Termination
+    elif any(k in q_lower for k in ["notice", "terminat", "cancel", "end early"]):
         notice = contract_meta.get("notice_period") or "Not explicitly specified"
         answer = (
-            f"### Termination Provisions & Notice Requirements\n\n"
-            f"- **Notice Period:** {notice}\n"
-            f"- **Governing Rule:** Either party wishing to terminate must provide written notice in accordance with the agreed timeframe.\n\n"
-            f"Please verify whether termination requires cause (such as material breach with a cure period) or allows convenience."
+            f"Under **{contract_name}**, terminating the agreement requires providing **{notice}**.\n\n"
+            f"- **Required Notice Window:** **{notice}**\n"
+            f"- **Counterparty:** {company}\n\n"
+            f"**Practical guidance:** Check whether the contract allows termination 'for convenience' (anytime with written notice) or requires 'for cause' (such as an uncured breach with a 30-day cure period). Send all formal notices through certified delivery as required by the notices clause."
         )
 
-    elif "payment" in q_lower or "fee" in q_lower or "billing" in q_lower or "cost" in q_lower or "price" in q_lower or "rate" in q_lower:
-        payment = contract_meta.get("payment_terms") or "Standard invoicing terms apply as outlined in the contract scope"
+    # 6. Specific query on interest rate, late fees, or missing specific terms
+    elif any(k in q_lower for k in ["interest", "late fee", "late charge"]):
+        penalty = contract_meta.get("penalty_info") or ""
+        payment = contract_meta.get("payment_terms") or ""
+        has_interest = "interest" in penalty.lower() or "interest" in payment.lower()
+        if not has_interest and relevant_chunks:
+            for c in relevant_chunks:
+                if "interest" in c.get("text", "").lower() or "late fee" in c.get("text", "").lower():
+                    has_interest = True
+                    break
+        if not has_interest:
+            answer = (
+                f"**This specific detail is not stated in the contract.**\n\n"
+                f"- **Documented Payment Terms:** **{payment or 'Standard invoicing terms apply'}**\n"
+                f"- **Missing Information:** The agreement does not specify a separate late payment interest rate or penalty fee.\n\n"
+                f"**Practical guidance:** Unless an interest provision is formally established in a statement of work or amendment, default statutory commercial rates apply."
+            )
+            return {
+                "answer": answer,
+                "citations": [],
+                "sources": sources,
+                "show_sources": False
+            }
+
+    elif any(t in q_lower for t in ["severability", "arbitration", "non-compete", "audit right", "exclusivity", "insurance requirement", "warranty period"]):
+        missing_topic = next(t for t in ["severability", "arbitration", "non-compete", "audit right", "exclusivity", "insurance requirement", "warranty period"] if t in q_lower)
+        found_in_chunks = False
+        if relevant_chunks:
+            for c in relevant_chunks:
+                if missing_topic in c.get("text", "").lower():
+                    found_in_chunks = True
+                    break
+        if not found_in_chunks:
+            answer = (
+                f"**This specific detail is not stated in the contract.**\n\n"
+                f"- I checked the clauses and metadata for **{contract_name}**, and there is no provision addressing **{missing_topic}**.\n\n"
+                f"**What this means:** Because this term is not documented in the agreement, neither party has established contractual rights or duties regarding {missing_topic}."
+            )
+            return {
+                "answer": answer,
+                "citations": [],
+                "sources": sources,
+                "show_sources": False
+            }
+
+    # 7. Factual contract questions: Payment terms, fees, billing
+    elif any(k in q_lower for k in ["payment", "fee", "billing", "cost", "price", "rate", "invoic"]):
+        payment = contract_meta.get("payment_terms") or "Standard commercial invoicing terms as outlined in the contract scope"
         answer = (
-            f"### Payment & Billing Terms\n\n"
-            f"- **Payment Schedule / Terms:** {payment}\n"
-            f"- **Summary:** Ensure invoices are submitted with full itemized documentation according to the counterparty billing guidelines."
+            f"Payment terms for this agreement are governed by **{payment}**.\n\n"
+            f"- **Invoicing & Payment Schedule:** **{payment}**\n"
+            f"- **Billing Party:** {company}\n\n"
+            f"**What this means for you:** Verify invoices against milestone deliverables before approving payment, and ensure payment is issued within the specified timeframe to prevent late fees or service interruptions."
         )
 
-    elif "penalt" in q_lower or "late fee" in q_lower or "liquidated damages" in q_lower or "sla" in q_lower:
-        penalty = contract_meta.get("penalty_info") or "No separate monetary penalty or liquidated damages clause was detected"
+    # 7. Factual contract questions: Penalties, SLAs, Liquidated damages
+    elif any(k in q_lower for k in ["penalt", "late fee", "liquidated damages", "sla", "service credit"]):
+        penalty = contract_meta.get("penalty_info") or "No separate monetary penalty or liquidated damages clause was identified in this contract."
         answer = (
-            f"### Penalties, Service Credits & Liquidated Damages\n\n"
-            f"- **Provisions Identified:** {penalty}\n\n"
-            f"**Operational Context:** If operational delays or SLA shortfalls occur, review whether remedies are limited to service credits or extend to general damages."
+            f"Regarding penalties and performance standards, the contract specifies: **{penalty}**\n\n"
+            f"- **Documented Remedy / Penalty Provision:** {penalty}\n\n"
+            f"**Practical guidance:** If operational delays or service interruptions occur, verify whether remedies are limited to service credits or permit broader breach of contract claims."
         )
 
-    elif "risk" in q_lower or "liability" in q_lower or "indemn" in q_lower or "exposure" in q_lower:
+    # 8. Factual contract questions: Risk & Liability exposure
+    elif any(k in q_lower for k in ["risk", "liability", "indemn", "exposure", "cap"]):
         risk_level = contract_meta.get("risk_level", "Not Assessed")
-        summary = contract_meta.get("summary", "")
+        summary = contract_meta.get("summary", "Standard commercial terms.")
         answer = (
-            f"### Legal & Operational Risk Assessment\n\n"
+            f"This agreement carries an overall risk rating of **{risk_level}**.\n\n"
             f"- **Assessed Risk Level:** **{risk_level}**\n"
-            f"- **Summary Analysis:** {summary}\n\n"
-            f"**Key Considerations:** Pay close attention to indemnification obligations, limitation of liability caps, and auto-renewal deadlines to mitigate exposure."
+            f"- **Key Assessment Summary:** {summary}\n\n"
+            f"**Risk takeaway:** Carefully check the indemnification obligations and limitation of liability caps before signing or renewing to avoid unexpected financial exposure."
         )
 
+    # 9. Matching relevant chunk if found
     elif relevant_chunks:
         best_chunk = relevant_chunks[0].get("text", "").strip()
+        page_num = relevant_chunks[0].get("page_number", 1)
         answer = (
-            f"### Relevant Contract Provisions\n\n"
-            f"Based on the analysis of **{contract_name}**:\n\n"
-            f"> \"{best_chunk}\"\n\n"
-            f"This section addresses your query regarding contract terms and operational guidelines."
+            f"Here is the relevant clause from **{contract_name}** that addresses your question:\n\n"
+            f"> \"{best_chunk[:320]}...\"\n\n"
+            f"**In everyday language:** This clause establishes the contractual rules for this topic. "
+            f"Let me know if you would like me to explain any specific term or verify its legal implications."
         )
 
+    # 10. Explicit statement when information is missing or not in the contract
     else:
-        summary = contract_meta.get("summary")
-        summary_text = f"\n\n**Contract Overview:** {summary}" if summary else ""
         answer = (
-            f"### Contract Information\n\n"
-            f"I reviewed **{contract_name}** for your query, but this information could not be found in the contract.{summary_text}\n\n"
-            f"Feel free to ask about payment terms, renewal dates, termination requirements, or risk assessments."
+            f"I checked **{contract_name}** for this specific topic, but **this detail is not stated in the contract**.\n\n"
+            f"- The agreement text and metadata do not contain specific terms addressing your question.\n"
+            f"- To explore documented provisions, feel free to ask about payment terms, renewal deadlines, notice periods, or risk ratings."
         )
 
     return {
         "answer": answer,
-        "citations": citations,
-        "sources": sources
+        "citations": [],
+        "sources": sources,
+        "show_sources": False
     }

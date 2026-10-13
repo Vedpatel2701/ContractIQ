@@ -3,11 +3,12 @@ import uuid
 import shutil
 from pathlib import Path
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, status
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.security import decode_access_token
 from app.models.contract import Contract
 from app.models.clause import Clause
 from app.models.risk import RiskIndicator
@@ -51,7 +52,8 @@ def format_contract_response(c: Contract) -> dict:
             "legalOwner": c.legal_owner or "Legal Team"
         },
         "fileName": c.file_name,
-        "fileSize": c.file_size
+        "fileSize": c.file_size,
+        "isDemo": bool(c.is_demo)
     }
 
 @router.get("", response_model=List[ContractResponse], response_model_by_alias=False)
@@ -86,22 +88,69 @@ def get_contract(
 @router.get("/{contract_id}/file")
 def get_contract_file(
     contract_id: str,
+    download: bool = Query(False, description="Whether to trigger a file download instead of inline browser viewing"),
+    token: Optional[str] = Query(None, description="Auth token for direct browser navigation"),
     current_user: User = Depends(get_current_user_or_demo),
     db: Session = Depends(get_db)
 ):
+    # If token query parameter is supplied (e.g. browser opens in new tab), authenticate the token
+    if token:
+        try:
+            payload = decode_access_token(token)
+            if payload and payload.get("sub"):
+                token_user = db.query(User).filter(User.id == payload.get("sub")).first()
+                if token_user:
+                    current_user = token_user
+        except Exception:
+            pass
 
     contract = verify_contract_access(contract_id, current_user, db)
     
+    # Secure document serving: file_path comes strictly from the authorized contract database record
     if contract.file_path and os.path.exists(contract.file_path):
-        media_type = "application/pdf" if contract.file_path.endswith(".pdf") else "text/plain"
+        lower_path = contract.file_path.lower()
+        content_disposition_type = "attachment" if download else "inline"
+
+        if lower_path.endswith(".pdf"):
+            media_type = "application/pdf"
+        elif lower_path.endswith(".png"):
+            media_type = "image/png"
+        elif lower_path.endswith((".jpg", ".jpeg")):
+            media_type = "image/jpeg"
+        elif lower_path.endswith((".txt", ".md", ".rtf")):
+            media_type = "text/plain; charset=utf-8"
+        elif lower_path.endswith((".docx", ".doc")):
+            # Modern browsers cannot render DOCX files inline natively.
+            # If download requested, serve DOCX as attachment.
+            # If inline view requested and extracted_text is available, serve clean text inline.
+            if not download and contract.extracted_text:
+                safe_txt_name = (contract.file_name or contract_id).rsplit(".", 1)[0] + ".txt"
+                return Response(
+                    content=contract.extracted_text,
+                    media_type="text/plain; charset=utf-8",
+                    headers={"Content-Disposition": f'inline; filename="{safe_txt_name}"'}
+                )
+            media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            content_disposition_type = "attachment"
+        else:
+            media_type = "application/octet-stream"
+
         return FileResponse(
             contract.file_path,
             media_type=media_type,
+            content_disposition_type=content_disposition_type,
             filename=contract.file_name or f"{contract_id}.pdf"
         )
     
+    # Fallback for demo contracts or records without disk files: serve extracted text inline
     content = contract.extracted_text or f"# {contract.name}\nCompany: {contract.company}\nType: {contract.contract_type}\n\nSummary:\n{contract.summary}\n\nPayment Terms:\n{contract.payment_terms}\nNotice Period:\n{contract.notice_period}"
-    return Response(content=content, media_type="text/plain; charset=utf-8")
+    disp_type = "attachment" if download else "inline"
+    safe_name = contract.file_name or f"{contract_id}.txt"
+    return Response(
+        content=content,
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'{disp_type}; filename="{safe_name}"'}
+    )
 
 @router.post("/upload", response_model=ContractResponse, response_model_by_alias=False)
 async def upload_contract(

@@ -71,9 +71,18 @@ export default function ContractDetailPage() {
 
   const keyInfoItems = [
     { label: "Contract Type", value: contract.contractType || "Commercial Agreement" },
+    { label: "Effective Date", value: contract.startDate || "Not specified" },
+    { label: "Expiration Date", value: contract.expiryDate || "Not specified" },
+    { 
+      label: "Next Renewal Date", 
+      value: contract.renewalDate && contract.renewalDate !== "Not applicable" 
+        ? contract.renewalDate 
+        : contract.renewalDate === "Not applicable" 
+        ? "Not applicable (Fixed Term)" 
+        : "Not specified" 
+    },
     { label: "Notice Period", value: contract.noticePeriod || "Not specified" },
     { label: "Payment Terms", value: contract.paymentTerms || "Standard Terms" },
-    { label: "Renewal Date", value: contract.renewalDate || "Not specified" },
   ];
 
   return (
@@ -90,7 +99,11 @@ export default function ContractDetailPage() {
               💬 Ask Assistant
             </Button>
             <a
-              href={`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1"}/contracts/${contract.id}/file`}
+              href={`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1"}/contracts/${contract.id}/file${
+                typeof window !== "undefined" && (localStorage.getItem("contractiq_token") || localStorage.getItem("token"))
+                  ? `?token=${encodeURIComponent(localStorage.getItem("contractiq_token") || localStorage.getItem("token") || "")}`
+                  : ""
+              }`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center font-semibold rounded-lg shadow-sm transition-all px-4 py-2 text-sm border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-muted)]"
@@ -118,7 +131,7 @@ export default function ContractDetailPage() {
         </div>
 
         {/* Key Information Grid */}
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {keyInfoItems.map((item) => (
             <div key={item.label} className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3">
               <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-muted)]">{item.label}</p>

@@ -120,20 +120,52 @@ export interface SourceItem {
   file_url?: string | null;
 }
 
-export async function sendChatMessage(
-  contractId: string,
-  message: string
-): Promise<{
+export interface ChatMessageItem {
   id: string;
-  role: "assistant";
+  role: "user" | "assistant";
   text: string;
   citations?: string[];
   sources?: SourceItem[];
-}> {
+  show_sources?: boolean;
+  created_at?: string | null;
+}
+
+export async function fetchChatHistory(contractId: string): Promise<ChatMessageItem[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/contracts/${contractId}/chat`, {
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      return [];
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn("[API Client] Chat history fetch failed:", err);
+    return [];
+  }
+}
+
+export async function clearChatHistory(contractId: string): Promise<void> {
+  try {
+    await fetch(`${API_BASE_URL}/contracts/${contractId}/chat`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+  } catch (err) {
+    console.warn("[API Client] Clear chat history failed:", err);
+  }
+}
+
+export async function sendChatMessage(
+  contractId: string,
+  message: string,
+  clientMessageId?: string
+): Promise<ChatMessageItem> {
   const res = await fetch(`${API_BASE_URL}/contracts/${contractId}/chat`, {
     method: "POST",
     headers: getAuthHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, client_message_id: clientMessageId }),
   });
   if (!res.ok) {
     throw new Error("Chat service unavailable");

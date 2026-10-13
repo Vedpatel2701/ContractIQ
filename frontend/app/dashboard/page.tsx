@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { StatusBadge, RiskBadge } from "@/components/ui/status-badge";
+import { RiskBadge } from "@/components/ui/status-badge";
 import { fetchContracts } from "@/lib/api";
 import type { ContractRecord } from "@/types/contracts";
 
@@ -186,17 +186,14 @@ export default function DashboardOverviewPage() {
                   className="flex items-center justify-between p-3.5 transition-colors hover:bg-[var(--surface-muted)]"
                 >
                   <div className="min-w-0 flex-1 pr-4">
-                    <div className="flex items-center gap-2">
-                      <Link
-                        href={`/dashboard/contracts/${contract.id}`}
-                        className="font-semibold text-sm text-[var(--foreground)] hover:text-blue-600 dark:hover:text-blue-400 truncate"
-                      >
-                        {contract.name}
-                      </Link>
-                      <StatusBadge status={contract.status} />
-                    </div>
+                    <Link
+                      href={`/dashboard/contracts/${contract.id}`}
+                      className="font-semibold text-sm text-[var(--foreground)] hover:text-blue-600 dark:hover:text-blue-400 truncate block"
+                    >
+                      {contract.name}
+                    </Link>
                     <p className="mt-0.5 text-xs text-[var(--text-secondary)] truncate">
-                      {contract.company} • <span className="font-mono text-[11px] text-[var(--text-muted)]">{contract.id}</span>
+                      {contract.company}
                     </p>
                   </div>
 
@@ -204,9 +201,9 @@ export default function DashboardOverviewPage() {
                     <RiskBadge risk={contract.riskLevel} />
                     <Link
                       href={`/dashboard/contracts/${contract.id}`}
-                      className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--surface-muted)] transition"
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 transition"
                     >
-                      Review →
+                      View →
                     </Link>
                   </div>
                 </div>
@@ -222,38 +219,35 @@ export default function DashboardOverviewPage() {
             <p className="text-xs text-[var(--text-secondary)]">Renewal and notice windows</p>
           </div>
 
-          <Card className="space-y-2.5 p-4">
+          <Card className="space-y-2 p-3.5">
             {contracts
-              .filter((c) => Boolean(c.renewalDate))
+              .filter((c) => Boolean(c.renewalDate) && c.renewalDate !== "Not applicable" && c.renewalDate !== "None")
               .slice(0, 4)
               .map((c) => (
                 <div
                   key={c.id}
-                  className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 space-y-1"
+                  className="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] hover:bg-[var(--surface)] transition-colors"
                 >
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 pr-3">
                     <Link
                       href={`/dashboard/contracts/${c.id}`}
-                      className="text-xs font-semibold text-[var(--foreground)] hover:text-blue-600 dark:hover:text-blue-400"
+                      className="text-xs font-semibold text-[var(--foreground)] hover:text-blue-600 dark:hover:text-blue-400 truncate block"
                     >
                       {c.name}
                     </Link>
-                    <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800 dark:bg-blue-950 dark:text-blue-300">
-                      Renewal
-                    </span>
+                    <p className="text-[11px] text-[var(--text-muted)] truncate mt-0.5">
+                      {c.company}
+                    </p>
                   </div>
-                  <p className="text-xs text-[var(--text-secondary)]">
-                    Renewal: <span className="font-semibold text-[var(--foreground)]">{c.renewalDate}</span>
-                  </p>
-                  <p className="text-[11px] text-[var(--text-muted)]">
-                    Notice: {c.noticePeriod || "30 days required"}
-                  </p>
+                  <span className="shrink-0 text-xs font-mono font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-900">
+                    {c.renewalDate}
+                  </span>
                 </div>
               ))}
 
             <Link
               href="/dashboard/notifications"
-              className="block pt-1 text-center text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400"
+              className="block pt-1.5 text-center text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400"
             >
               View all notifications & alerts →
             </Link>

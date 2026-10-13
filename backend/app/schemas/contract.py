@@ -92,6 +92,7 @@ class ContractResponse(BaseModel):
     
     fileName: Optional[str] = Field(default=None, alias="file_name")
     fileSize: Optional[str] = Field(default=None, alias="file_size")
+    isDemo: Optional[bool] = Field(default=False, alias="is_demo")
 
     class Config:
         populate_by_name = True

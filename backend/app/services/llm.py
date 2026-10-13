@@ -300,7 +300,7 @@ def analyze_with_gemini(text: str) -> Dict[str, Any]:
 You are an expert legal AI assistant. Analyze the following contract text and extract its factual terms and risk analysis.
 
 CRITICAL EXTRACTION RULES:
-1. Do NOT invent dates, parties, or terms. If a date or term is not explicitly stated in the document, set its value to null.
+1. Extract explicit dates when present. If a contract explicitly states a start date and an annual renewal or 1-year term (e.g. 'entered into on March 1, 2026 ... subject to annual renewal'), logically compute and provide the next renewal date and expiration date (YYYY-MM-DD). If a contract genuinely does not renew or has no term, set 'renewalDate': 'Not applicable'. Do not invent dates when terms are completely unspecified.
 2. If risk cannot be determined from text, set "riskLevel": "Not Assessed".
 3. Status should reflect actual state: "Active", "Review Required", or "Draft".
 4. Extract key actual clauses and genuine risk indicators with clear legal rationale.
@@ -379,6 +379,30 @@ def heuristic_contract_analysis(text: str) -> Dict[str, Any]:
     start_date = date_matches[0] if len(date_matches) > 0 else None
     expiry_date = date_matches[1] if len(date_matches) > 1 else None
     renewal_date = date_matches[2] if len(date_matches) > 2 else None
+
+    # Infer expiry and renewal dates logically if contract has annual renewal / term
+    if start_date and not renewal_date:
+        if any(w in lower_text for w in ["annual renewal", "renew annually", "renews annually", "auto-renew", "automatic renewal"]):
+            try:
+                from datetime import datetime, timedelta
+                clean_sd = re.sub(r"[,\.]", "", start_date).strip()
+                parsed_dt = None
+                for fmt in ["%Y-%m-%d", "%B %d %Y", "%b %d %Y", "%m/%d/%Y"]:
+                    try:
+                        parsed_dt = datetime.strptime(clean_sd, fmt)
+                        break
+                    except Exception:
+                        pass
+                if parsed_dt:
+                    next_renewal = parsed_dt.replace(year=parsed_dt.year + 1)
+                    renewal_date = next_renewal.strftime("%Y-%m-%d")
+                    if not expiry_date:
+                        term_end = next_renewal - timedelta(days=1)
+                        expiry_date = term_end.strftime("%Y-%m-%d")
+            except Exception:
+                pass
+        elif any(w in lower_text for w in ["no renewal", "does not renew", "non-disclosure", "nda"]):
+            renewal_date = "Not applicable"
 
     # Notice period
     notice_match = re.search(

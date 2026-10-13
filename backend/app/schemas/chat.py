@@ -13,6 +13,8 @@ class SourceItem(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+    client_message_id: Optional[str] = None
+    session_id: Optional[str] = None
 
 class ChatResponse(BaseModel):
     id: str
@@ -20,12 +22,16 @@ class ChatResponse(BaseModel):
     text: str
     citations: Optional[List[str]] = []
     sources: Optional[List[SourceItem]] = []
+    show_sources: bool = False
     created_at: Optional[datetime] = None
 
 class MessageHistoryItem(BaseModel):
     id: str
     role: str
     text: str
+    citations: Optional[List[str]] = []
+    sources: Optional[List[SourceItem]] = []
+    show_sources: bool = False
     created_at: Optional[datetime] = None
 
     class Config:
