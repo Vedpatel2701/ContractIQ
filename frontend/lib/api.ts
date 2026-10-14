@@ -293,3 +293,121 @@ export async function updateUserRole(userId: string, role: string, canDelete?: b
   }
   return await res.json();
 }
+
+export interface ExecutiveOverview {
+  totalContracts: number;
+  activeContracts: number;
+  contractsExpiringSoon: number;
+  upcomingRenewals: number;
+  overdueCount: number;
+  reviewRequired: number;
+  draftContracts: number;
+  expiredContracts: number;
+  highRiskContracts: number;
+  riskDistribution: Record<string, number>;
+  statusDistribution: Record<string, number>;
+  categoryDistribution: Record<string, number>;
+}
+
+export interface SmartInsights {
+  highRiskAlerts: Array<{
+    contractId: string;
+    contractName: string;
+    company: string;
+    riskLevel: string;
+    alert: string;
+    recommendation: string;
+  }>;
+  upcomingDeadlines: Array<{
+    contractId: string;
+    contractName: string;
+    company: string;
+    typeLabel: string;
+    date: string | null;
+    daysRemaining: number | null;
+    status: string;
+    urgency: string;
+    action: string;
+  }>;
+  missingOrProblematicClauses: Array<{
+    contractId: string;
+    contractName: string;
+    company: string;
+    issue: string;
+    category: string;
+    recommendedRemedy: string;
+  }>;
+  actionableRecommendations: Array<{
+    contractId: string;
+    contractName: string;
+    company: string;
+    priority: string;
+    timing: string;
+    recommendation: string;
+  }>;
+}
+
+export interface DeadlineItem {
+  id: string;
+  contractId: string;
+  contractName: string;
+  contractType: string;
+  company: string;
+  type: "EXPIRY" | "RENEWAL" | "NOTICE" | "MISSING_DATE";
+  typeLabel: string;
+  date: string | null;
+  daysRemaining: number | null;
+  status: "OVERDUE" | "DUE_TODAY" | "URGENT" | "UPCOMING" | "UNCLEAR";
+  urgency: "critical" | "high" | "medium" | "low" | "info";
+  action: string;
+  riskLevel: string;
+  startDate?: string | null;
+  expiryDate?: string | null;
+  renewalDate?: string | null;
+  noticePeriod?: string | null;
+  paymentTerms?: string | null;
+  penaltyInfo?: string | null;
+  summary?: string | null;
+  riskIndicators?: string[];
+}
+
+export interface RecentActivityItem {
+  id: string;
+  title: string;
+  company: string;
+  status: string;
+  riskLevel: string;
+  lastUpdated: string;
+}
+
+export interface DashboardResponse {
+  executiveOverview: ExecutiveOverview;
+  smartInsights: SmartInsights;
+  deadlines: DeadlineItem[];
+  recentActivity: RecentActivityItem[];
+  stats: {
+    totalContracts: number;
+    activeContracts: number;
+    reviewRequired: number;
+    draftContracts: number;
+    expiredContracts: number;
+    highRiskContracts: number;
+    renewalsDueNext90Days: number;
+    contractVisibility: string;
+    riskDistribution: Record<string, number>;
+    statusDistribution: Record<string, number>;
+  };
+}
+
+export async function fetchDashboardData(): Promise<DashboardResponse> {
+  const res = await fetch(`${API_BASE_URL}/dashboard`, {
+    headers: getAuthHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to load dashboard intelligence");
+  }
+  return await res.json();
+}
+
