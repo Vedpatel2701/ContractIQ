@@ -93,8 +93,8 @@ class VectorStore:
         if pg_results:
             return pg_results
 
-        # 2. Fallback: Keyword Overlap Search (JSON / In-memory)
-        return self._search_keyword_fallback(query, top_k)
+        # 2. Fallback: Keyword Overlap Search (JSON / In-memory / PostgreSQL)
+        return self._search_keyword_fallback(query, top_k, db)
 
     def _search_postgresql_vector(self, query: str, top_k: int, db: Optional[Session] = None) -> List[Dict[str, Any]]:
         """Queries PostgreSQL for contract_chunks filtered by contract_id using Cosine Similarity."""
@@ -142,8 +142,33 @@ class VectorStore:
             if close_db:
                 db.close()
 
-    def _search_keyword_fallback(self, query: str, top_k: int) -> List[Dict[str, Any]]:
-        """Fallback keyword overlap search."""
+    def _search_keyword_fallback(self, query: str, top_k: int, db: Optional[Session] = None) -> List[Dict[str, Any]]:
+        """Fallback keyword overlap search, loading from PostgreSQL if JSON is not present."""
+        if not self.chunks:
+            close_db = False
+            if db is None:
+                db = SessionLocal()
+                close_db = True
+            try:
+                db_chunks = db.query(ContractChunk).filter(
+                    ContractChunk.contract_id == self.contract_id
+                ).order_by(ContractChunk.chunk_index.asc()).all()
+                self.chunks = [
+                    {
+                        "contract_id": c.contract_id,
+                        "chunk_id": c.chunk_index,
+                        "text": c.text,
+                        "page_number": c.page_number,
+                        "section": c.section
+                    }
+                    for c in db_chunks
+                ]
+            except Exception as e:
+                print(f"[VectorStore Fallback Load Error for {self.contract_id}] {e}")
+            finally:
+                if close_db:
+                    db.close()
+
         if not self.chunks:
             return []
 
@@ -169,3 +194,87 @@ class VectorStore:
 
         scored_chunks.sort(key=lambda x: x[0], reverse=True)
         return [item[1] for item in scored_chunks[:top_k]]
+
+    @classmethod
+    def search_across_contracts(
+        cls,
+        contract_ids: List[str],
+        query: str,
+        top_k: int = 5,
+        db: Optional[Session] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieves relevant chunks strictly across the given list of authorized contract IDs.
+        Used for workspace-wide queries in General Assistant mode.
+        """
+        if not contract_ids:
+            return []
+
+        close_db = False
+        if db is None:
+            db = SessionLocal()
+            close_db = True
+
+        try:
+            query_emb = generate_embedding(query)
+            db_chunks = db.query(ContractChunk).filter(
+                ContractChunk.contract_id.in_(contract_ids)
+            ).all()
+
+            if not db_chunks:
+                return []
+
+            scored_chunks = []
+            if query_emb:
+                for c in db_chunks:
+                    if c.embedding:
+                        sim = cosine_similarity(query_emb, c.embedding)
+                        if sim > 0.15:
+                            scored_chunks.append((sim, {
+                                "contract_id": c.contract_id,
+                                "chunk_id": c.chunk_index,
+                                "text": c.text,
+                                "page_number": c.page_number,
+                                "section": c.section,
+                                "score": round(sim, 4)
+                            }))
+
+            # If vector search yielded matches, return top_k
+            if scored_chunks:
+                scored_chunks.sort(key=lambda x: x[0], reverse=True)
+                return [item[1] for item in scored_chunks[:top_k]]
+
+            # Fallback keyword match across authorized chunks
+            raw_terms = query.lower().split()
+            query_terms = [t.strip("?,.:;\"'()[]") for t in raw_terms if t.lower() not in STOP_WORDS and len(t) > 1]
+            if not query_terms:
+                query_terms = raw_terms
+
+            for c in db_chunks:
+                chunk_text = (c.text or "").lower()
+                score = 0
+                for term in query_terms:
+                    if term in chunk_text:
+                        score += 2
+                clean_q = " ".join(query_terms)
+                if clean_q and clean_q in chunk_text:
+                    score += 5
+                if score > 0:
+                    scored_chunks.append((score, {
+                        "contract_id": c.contract_id,
+                        "chunk_id": c.chunk_index,
+                        "text": c.text,
+                        "page_number": c.page_number,
+                        "section": c.section,
+                        "score": score
+                    }))
+
+            scored_chunks.sort(key=lambda x: x[0], reverse=True)
+            return [item[1] for item in scored_chunks[:top_k]]
+        except Exception as e:
+            print(f"[VectorStore search_across_contracts error]: {e}")
+            return []
+        finally:
+            if close_db:
+                db.close()
+

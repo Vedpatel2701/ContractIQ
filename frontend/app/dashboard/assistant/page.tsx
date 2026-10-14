@@ -17,19 +17,19 @@ import {
 import type { ContractRecord } from "@/types/contracts";
 
 const generalStarterQuestions = [
-  "What is standard indemnification in commercial agreements?",
-  "How many high-risk contracts exist in the workspace?",
-  "Explain limitation of liability caps and industry standards",
-  "What notice window is recommended to prevent auto-renewal?",
+  "What are our upcoming contract deadlines?",
+  "Which contracts have high risk ratings?",
+  "Explain indemnification in commercial agreements",
+  "What is the difference between termination for convenience and for cause?",
 ];
 
 const contractStarterQuestions = [
+  "What is the deadline for this contract?",
+  "What is the expiry date, and does this contract renew automatically?",
   "Summarize this contract's main terms and obligations",
   "What are the payment terms and invoicing schedule?",
-  "When does this contract renew and what notice is required?",
-  "What are the highest-risk clauses and liability exposures?",
-  "Explain the indemnification obligations in simple terms",
-  "What are the penalties or SLA service credits?",
+  "Explain the indemnification obligations in this agreement",
+  "Show me the exact source for your answer",
 ];
 
 type Message = {
@@ -81,7 +81,7 @@ function renderMarkdownMessage(text: string) {
 
     // Empty space
     if (!trimmed) {
-      elements.push(<div key={`space-${i}`} className="h-2" />);
+      elements.push(<div key={`space-${i}`} className="h-1.5" />);
       i++;
       continue;
     }
@@ -96,7 +96,7 @@ function renderMarkdownMessage(text: string) {
       }
       if (i < lines.length) i++;
       elements.push(
-        <pre key={`code-${i}`} className="my-2.5 p-3 rounded-xl bg-slate-900 text-slate-100 font-mono text-xs overflow-x-auto border border-slate-800">
+        <pre key={`code-${i}`} className="my-2 p-3 rounded-xl bg-slate-900 text-slate-100 font-mono text-xs overflow-x-auto border border-slate-800">
           <code>{codeLines.join("\n")}</code>
         </pre>
       );
@@ -118,12 +118,12 @@ function renderMarkdownMessage(text: string) {
         const dataRows = (hasDivider ? tableLines.slice(2) : tableLines.slice(1)).map(parseRow);
 
         elements.push(
-          <div key={`table-${i}`} className="overflow-x-auto my-3 rounded-xl border border-[var(--border)] shadow-2xs">
+          <div key={`table-${i}`} className="overflow-x-auto my-2.5 rounded-xl border border-[var(--border)] shadow-2xs">
             <table className="w-full text-xs text-left border-collapse">
               <thead className="bg-[var(--surface-muted)] text-[var(--foreground)] border-b border-[var(--border)] font-semibold">
                 <tr>
                   {headerRow.map((cell, cIdx) => (
-                    <th key={cIdx} className="px-3.5 py-2.5 font-bold text-[11px] uppercase tracking-wider text-[var(--text-secondary)]">
+                    <th key={cIdx} className="px-3 py-2 font-bold text-[11px] uppercase tracking-wider text-[var(--text-secondary)]">
                       {renderFormattedInline(cell)}
                     </th>
                   ))}
@@ -133,7 +133,7 @@ function renderMarkdownMessage(text: string) {
                 {dataRows.map((row, rIdx) => (
                   <tr key={rIdx} className="hover:bg-[var(--surface-muted)]/50 transition">
                     {row.map((cell, cIdx) => (
-                      <td key={cIdx} className="px-3.5 py-2 text-[12px] text-[var(--foreground)]">
+                      <td key={cIdx} className="px-3 py-2 text-[12px] text-[var(--foreground)]">
                         {renderFormattedInline(cell)}
                       </td>
                     ))}
@@ -147,34 +147,10 @@ function renderMarkdownMessage(text: string) {
       }
     }
 
-    // Callout box / takeaway
-    if (trimmed.includes("💡 What this means for you") || trimmed.startsWith("💡")) {
-      const calloutText = trimmed
-        .replace(/^###\s*/, "")
-        .replace(/^💡\s*/, "")
-        .replace(/^(\*\*)?What this means for you:?(\*\*)?\s*/i, "");
-      elements.push(
-        <div
-          key={`callout-${i}`}
-          className="my-3 rounded-xl border border-blue-200 bg-blue-50/70 p-3.5 text-sm leading-relaxed text-blue-950 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-100 shadow-2xs"
-        >
-          <div className="flex items-center gap-2 font-bold text-blue-700 dark:text-blue-300 mb-1">
-            <span>💡</span>
-            <span>What this means for you</span>
-          </div>
-          <div className="text-xs sm:text-[13px] leading-relaxed">
-            {renderFormattedInline(calloutText)}
-          </div>
-        </div>
-      );
-      i++;
-      continue;
-    }
-
     // Headings
     if (trimmed.startsWith("### ")) {
       elements.push(
-        <h4 key={`h3-${i}`} className="text-xs sm:text-sm font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 mt-3.5 mb-1 flex items-center gap-1.5">
+        <h4 key={`h3-${i}`} className="text-xs sm:text-sm font-bold text-blue-600 dark:text-blue-400 mt-3 mb-1 flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-blue-500 inline-block" />
           {trimmed.replace("### ", "").replace(/^\d+\.\s*/, "")}
         </h4>
@@ -185,7 +161,7 @@ function renderMarkdownMessage(text: string) {
 
     if (trimmed.startsWith("## ")) {
       elements.push(
-        <h3 key={`h2-${i}`} className="text-sm sm:text-base font-bold text-[var(--foreground)] mt-3.5 mb-1.5">
+        <h3 key={`h2-${i}`} className="text-sm sm:text-base font-bold text-[var(--foreground)] mt-3 mb-1">
           {trimmed.replace("## ", "")}
         </h3>
       );
@@ -195,7 +171,7 @@ function renderMarkdownMessage(text: string) {
 
     if (trimmed.startsWith("# ")) {
       elements.push(
-        <h2 key={`h1-${i}`} className="text-base sm:text-lg font-bold text-[var(--foreground)] mt-3.5 mb-2">
+        <h2 key={`h1-${i}`} className="text-base sm:text-lg font-bold text-[var(--foreground)] mt-3 mb-1.5">
           {trimmed.replace("# ", "")}
         </h2>
       );
@@ -206,7 +182,7 @@ function renderMarkdownMessage(text: string) {
     // Blockquotes
     if (trimmed.startsWith("> ")) {
       elements.push(
-        <blockquote key={`quote-${i}`} className="border-l-3 border-blue-500 pl-3.5 my-2 text-xs sm:text-[13px] italic text-[var(--text-secondary)] bg-[var(--surface-muted)] py-2 rounded-r-lg leading-relaxed">
+        <blockquote key={`quote-${i}`} className="border-l-3 border-blue-500 pl-3 my-2 text-xs sm:text-[13px] italic text-[var(--text-secondary)] bg-[var(--surface-muted)] py-1.5 rounded-r-lg leading-relaxed">
           {renderFormattedInline(trimmed.replace("> ", ""))}
         </blockquote>
       );
@@ -218,8 +194,8 @@ function renderMarkdownMessage(text: string) {
     const numMatch = trimmed.match(/^(\d+)\.\s+(.*)$/);
     if (numMatch) {
       elements.push(
-        <div key={`num-${i}`} className="flex items-start gap-2.5 my-1.5 text-xs sm:text-sm text-[var(--foreground)] leading-relaxed pl-1">
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-300 mt-0.5">
+        <div key={`num-${i}`} className="flex items-start gap-2 my-1 text-xs sm:text-sm text-[var(--foreground)] leading-relaxed pl-1">
+          <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-300 mt-0.5">
             {numMatch[1]}
           </span>
           <span className="flex-1">{renderFormattedInline(numMatch[2])}</span>
@@ -232,7 +208,7 @@ function renderMarkdownMessage(text: string) {
     // Bullet lists
     if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
       elements.push(
-        <div key={`bullet-${i}`} className="flex items-start gap-2.5 my-1.5 text-xs sm:text-sm text-[var(--foreground)] leading-relaxed pl-1">
+        <div key={`bullet-${i}`} className="flex items-start gap-2 my-1 text-xs sm:text-sm text-[var(--foreground)] leading-relaxed pl-1">
           <span className="text-blue-500 font-bold shrink-0 mt-0.5">•</span>
           <span className="flex-1">{renderFormattedInline(trimmed.substring(2))}</span>
         </div>
@@ -243,7 +219,7 @@ function renderMarkdownMessage(text: string) {
 
     // Standard paragraph
     elements.push(
-      <p key={`p-${i}`} className="text-xs sm:text-sm leading-relaxed text-[var(--foreground)] my-1.5">
+      <p key={`p-${i}`} className="text-xs sm:text-sm leading-relaxed text-[var(--foreground)] my-1">
         {renderFormattedInline(line)}
       </p>
     );
@@ -263,13 +239,20 @@ function SourceEvidenceSection({
   showSourcesDefault?: boolean;
 }) {
   const [isExpanded, setIsExpanded] = useState(showSourcesDefault);
+
+  useEffect(() => {
+    if (showSourcesDefault) {
+      setIsExpanded(true);
+    }
+  }, [showSourcesDefault]);
+
   const count = sources?.length || citations?.length || 0;
   if (count === 0) return null;
 
   const authToken = getAuthToken();
 
   return (
-    <div className="mt-3.5 border-t border-[var(--border)] pt-2.5 space-y-2">
+    <div className="mt-3 border-t border-[var(--border)] pt-2 space-y-2">
       <div className="flex items-center justify-between">
         <button
           type="button"
@@ -279,13 +262,13 @@ function SourceEvidenceSection({
           <svg className="h-3.5 w-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <span>{count} Verified Document {count === 1 ? "Source" : "Sources"}</span>
+          <span>{count} Verified {count === 1 ? "Source" : "Sources"}</span>
           <span className="text-[10px] text-[var(--text-muted)] font-normal">
-            ({isExpanded ? "Hide details" : "View evidence"})
+            ({isExpanded ? "Hide" : "View evidence"})
           </span>
         </button>
 
-        {/* Source quick pills */}
+        {/* Source quick page pills */}
         <div className="flex flex-wrap gap-1 items-center">
           {sources?.slice(0, 3).map((s, idx) => (
             <span
@@ -305,7 +288,7 @@ function SourceEvidenceSection({
             sources.map((src, idx) => {
               const fileBase = src.file_url ? `${API_BASE_URL.replace(/\/api\/v1$/, "")}${src.file_url}` : null;
               const tokenParam = authToken ? `?token=${encodeURIComponent(authToken)}` : "";
-              const docLower = src.document_name.toLowerCase();
+              const docLower = (src.document_name || "").toLowerCase();
               const isPdf = docLower.endsWith(".pdf") || (!docLower.endsWith(".docx") && !docLower.endsWith(".txt") && !docLower.endsWith(".png"));
               const isDocx = docLower.endsWith(".docx") || docLower.endsWith(".doc");
 
@@ -347,7 +330,7 @@ function SourceEvidenceSection({
 
                   {isDocx && (
                     <p className="text-[10px] text-[var(--text-muted)] italic">
-                      Note: Word documents open in viewer or download; browser page navigation applies to PDFs.
+                      Note: Word documents open in text view; browser page navigation applies to PDFs.
                     </p>
                   )}
 
@@ -390,6 +373,7 @@ function ContractAssistantPageContent() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [question, setQuestion] = useState("");
   const [isAnswering, setIsAnswering] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -443,6 +427,7 @@ function ContractAssistantPageContent() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Smooth auto-scroll when new messages arrive
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isAnswering, isLoadingHistory]);
@@ -480,6 +465,10 @@ function ContractAssistantPageContent() {
     if (!trimmed || isAnswering) return;
 
     setQuestion("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+
     const clientMessageId =
       typeof crypto !== "undefined" && crypto.randomUUID
         ? crypto.randomUUID()
@@ -509,31 +498,12 @@ function ContractAssistantPageContent() {
       };
       setMessages((prev) => [...prev, assistantMessage]);
     } catch {
-      let fallbackText = "";
-      let fallbackCitations: string[] = [];
-
-      if (selectedContract) {
-        const qLower = trimmed.toLowerCase();
-        if (qLower.includes("payment") || qLower.includes("fee") || qLower.includes("invoic")) {
-          fallbackText = `Under **${selectedContract.name}**, payment terms are governed by **${selectedContract.paymentTerms || "Standard Net 30 days"}** with counterparty **${selectedContract.company}**.\n\n- Invoices should be submitted according to the agreed milestone schedule to avoid payment holds.`;
-        } else if (qLower.includes("renew") || qLower.includes("expir")) {
-          fallbackText = `This agreement is scheduled for expiration on **${selectedContract.expiryDate || "Documented expiration date"}** with next renewal deadline **${selectedContract.renewalDate || "Not explicitly specified"}**.\n\n- To cancel or renegotiate terms, provide advance notice of **${selectedContract.noticePeriod || "30 days written notice"}**.`;
-        } else if (qLower.includes("risk") || qLower.includes("penalt") || qLower.includes("liabilit")) {
-          fallbackText = `This agreement has an assessed risk level of **${selectedContract.riskLevel}**.\n\n- **Identified factors:**\n${selectedContract.riskIndicators.map((r) => `- ${r}`).join("\n")}`;
-        } else {
-          fallbackText = `Here is the summary of **${selectedContract.name}**:\n\n${selectedContract.summary || "No executive summary available for this agreement."}`;
-        }
-      } else {
-        fallbackText = `I reviewed your query regarding general contract standards.\n\n- Ensure liability caps, indemnification provisions, and termination notice deadlines are aligned with your organization's legal policies.`;
-      }
-
       setMessages((prev) => [
         ...prev,
         {
-          id: `asst-${Date.now()}`,
+          id: `asst-err-${Date.now()}`,
           role: "assistant",
-          text: fallbackText,
-          citations: fallbackCitations,
+          text: "We encountered an issue communicating with the contract intelligence service. Please verify your connection or try again.",
           show_sources: false,
         },
       ]);
@@ -542,18 +512,25 @@ function ContractAssistantPageContent() {
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
   const activeStarters = selectedContract ? contractStarterQuestions : generalStarterQuestions;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
         title="Contract Assistant"
         description="Source-grounded AI document intelligence for individual agreements or workspace-wide legal analysis."
       />
 
       {/* Context Selector Header Bar */}
-      <Card className="p-4 bg-[var(--surface)]">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <Card className="p-3.5 bg-[var(--surface)]">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-3">
             <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] whitespace-nowrap">
               Context:
@@ -666,7 +643,7 @@ function ContractAssistantPageContent() {
           {/* Active Context Details Badges */}
           {selectedContract ? (
             <div className="flex items-center gap-2">
-              <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
                 selectedContract.riskLevel === "High" || selectedContract.riskLevel === "Critical" ? "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300 border border-red-200 dark:border-red-900" :
                 selectedContract.riskLevel === "Moderate" ? "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-900" :
                 "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900"
@@ -679,16 +656,16 @@ function ContractAssistantPageContent() {
             </div>
           ) : (
             <div className="text-xs text-[var(--text-muted)] font-medium">
-              Mode: Workspace & Legal Policy Intelligence
+              Mode: Workspace & Legal Concept Intelligence
             </div>
           )}
         </div>
       </Card>
 
       {/* Main Chat Workspace */}
-      <Card className="flex flex-col h-[620px] p-0 overflow-hidden">
+      <Card className="flex flex-col h-[640px] p-0 overflow-hidden shadow-sm">
         {/* Active Header Bar */}
-        <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface-muted)] px-5 py-3 text-xs">
+        <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface-muted)] px-5 py-2.5 text-xs">
           <div className="flex items-center gap-2 truncate">
             <span className={`h-2 w-2 rounded-full ${selectedContract ? "bg-emerald-500" : "bg-blue-500"}`} />
             <span className="font-semibold text-[var(--foreground)]">Active Context:</span>
@@ -707,39 +684,39 @@ function ContractAssistantPageContent() {
         </div>
 
         {/* Message History Container */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
           {isLoadingHistory ? (
             <div className="flex flex-col items-center justify-center h-full text-center space-y-3">
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
               <p className="text-xs text-[var(--text-muted)] font-medium">Loading conversation history...</p>
             </div>
           ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center max-w-xl mx-auto py-8 space-y-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 border border-blue-100 text-blue-600 dark:bg-blue-950 dark:border-blue-900 dark:text-blue-400">
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="flex flex-col items-center justify-center h-full text-center max-w-lg mx-auto py-6 space-y-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 border border-blue-100 text-blue-600 dark:bg-blue-950 dark:border-blue-900 dark:text-blue-400">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                 </svg>
               </div>
 
               <div>
-                <h3 className="text-base font-bold text-[var(--foreground)]">
-                  {selectedContract ? `Contract Assistant — ${selectedContract.name}` : "General Contract Assistant"}
+                <h3 className="text-sm font-bold text-[var(--foreground)]">
+                  {selectedContract ? `Contract Assistant — ${selectedContract.name}` : "Contract Intelligence Assistant"}
                 </h3>
                 <p className="mt-1 text-xs text-[var(--text-secondary)] leading-relaxed">
                   {selectedContract
-                    ? `Ask clear questions regarding payment terms, renewal deadlines, liabilities, or specific clauses in ${selectedContract.company}'s agreement.`
-                    : "Ask questions about legal concepts, contract standards, risk factors, or get an overview of your active contracts."}
+                    ? `Ask about deadlines, renewal terms, liabilities, payment obligations, or specific clauses in ${selectedContract.company}'s agreement.`
+                    : "Ask about upcoming workspace deadlines, high-risk agreements, or legal standards in plain English."}
                 </p>
               </div>
 
-              {/* Starter Question Cards */}
-              <div className="flex flex-wrap justify-center gap-2 pt-2">
+              {/* Starter Question Pills */}
+              <div className="flex flex-wrap justify-center gap-1.5 pt-1">
                 {activeStarters.map((q) => (
                   <button
                     key={q}
                     type="button"
                     onClick={() => handleSendMessage(q)}
-                    className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-medium text-[var(--text-secondary)] shadow-sm transition hover:border-blue-500 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-400 text-left cursor-pointer"
+                    className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] shadow-2xs transition hover:border-blue-500 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-400 text-left cursor-pointer"
                   >
                     {q}
                   </button>
@@ -753,10 +730,10 @@ function ContractAssistantPageContent() {
                 className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
               >
                 <div
-                  className={`leading-relaxed shadow-sm transition-all ${
+                  className={`leading-relaxed transition-all ${
                     msg.role === "user"
-                      ? "max-w-2xl rounded-2xl px-4 py-2.5 text-sm bg-blue-600 text-white font-medium shadow-xs"
-                      : "max-w-3xl rounded-2xl p-5 border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] space-y-3 shadow-[var(--shadow-card)] text-sm"
+                      ? "max-w-2xl rounded-2xl px-4 py-2.5 text-sm bg-blue-600 text-white font-medium shadow-2xs"
+                      : "max-w-3xl rounded-2xl p-4 sm:p-5 border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] space-y-2.5 shadow-2xs text-sm"
                   }`}
                 >
                   {msg.role === "assistant" && (
@@ -768,7 +745,7 @@ function ContractAssistantPageContent() {
                         Contract Intelligence Assistant
                       </span>
                       {selectedContract && (
-                        <span className="text-[10px] text-[var(--text-muted)] font-mono bg-[var(--surface-muted)] px-2 py-0.5 rounded border border-[var(--border)]">
+                        <span className="text-[10px] text-[var(--text-muted)] font-mono bg-[var(--surface-muted)] px-1.5 py-0.5 rounded border border-[var(--border)]">
                           {selectedContract.id}
                         </span>
                       )}
@@ -783,12 +760,12 @@ function ContractAssistantPageContent() {
                     )}
                   </div>
 
-                  {/* Source Evidence Section: Hidden on normal responses, shown when requested or needed */}
-                  {msg.role === "assistant" && Boolean(msg.show_sources) && ((msg.sources && msg.sources.length > 0) || (msg.citations && msg.citations.length > 0)) && (
+                  {/* Source Evidence Section: Hidden on routine responses, expanded when requested or toggled */}
+                  {msg.role === "assistant" && ((msg.sources && msg.sources.length > 0) || (msg.citations && msg.citations.length > 0)) && (
                     <SourceEvidenceSection
                       sources={msg.sources}
                       citations={msg.citations}
-                      showSourcesDefault={true}
+                      showSourcesDefault={Boolean(msg.show_sources)}
                     />
                   )}
                 </div>
@@ -798,38 +775,54 @@ function ContractAssistantPageContent() {
 
           {isAnswering && (
             <div className="flex items-start">
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-xs text-[var(--text-muted)] flex items-center gap-2">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-xs text-[var(--text-muted)] flex items-center gap-2.5 shadow-2xs">
                 <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                <span>Searching contract clauses and generating grounded answer...</span>
+                <span>Analyzing contract provisions and generating grounded answer...</span>
               </div>
             </div>
           )}
           <div ref={chatBottomRef} />
         </div>
 
-        {/* Question Input Form */}
-        <div className="border-t border-[var(--border)] bg-[var(--surface)] p-4">
+        {/* Multiline Message Composer Form */}
+        <div className="border-t border-[var(--border)] bg-[var(--surface)] p-3 sm:p-4">
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleSendMessage();
             }}
-            className="flex items-center gap-2"
+            className="flex items-end gap-2.5"
           >
-            <input
-              type="text"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder={
-                selectedContract
-                  ? `Ask about payment terms, renewal notice, liability caps for ${selectedContract.name}...`
-                  : "Ask about legal terms, risk factors, or workspace contract summaries..."
-              }
-              disabled={isAnswering}
-              className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-xs text-[var(--foreground)] focus:border-blue-600 focus:outline-none placeholder:text-[var(--text-muted)]"
-            />
-            <Button type="submit" disabled={isAnswering || !question.trim()} size="md">
-              Send
+            <div className="flex-1 relative rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10 transition">
+              <textarea
+                ref={textareaRef}
+                value={question}
+                onChange={(e) => {
+                  setQuestion(e.target.value);
+                  e.target.style.height = "auto";
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                }}
+                onKeyDown={handleKeyDown}
+                rows={1}
+                placeholder={
+                  selectedContract
+                    ? `Ask about deadlines, renewal notice, payment terms for ${selectedContract.name}... (Enter to send, Shift+Enter for newline)`
+                    : "Ask about upcoming deadlines, high-risk agreements, or legal terms... (Enter to send, Shift+Enter for newline)"
+                }
+                disabled={isAnswering}
+                className="w-full resize-none bg-transparent px-3.5 py-2.5 text-xs text-[var(--foreground)] placeholder:text-[var(--text-muted)] focus:outline-none max-h-32 leading-relaxed"
+              />
+            </div>
+            <Button
+              type="submit"
+              disabled={isAnswering || !question.trim()}
+              size="md"
+              className="shrink-0 flex items-center gap-1.5"
+            >
+              <span>Send</span>
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
             </Button>
           </form>
         </div>

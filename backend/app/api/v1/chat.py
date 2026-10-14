@@ -8,7 +8,7 @@ from app.models.contract import Contract
 from app.models.chat import ChatMessage
 from app.models.user import User
 from app.schemas.chat import ChatRequest, ChatResponse, MessageHistoryItem, SourceItem
-from app.services.rag_chat import answer_contract_question, answer_general_question
+from app.services.rag_chat import answer_contract_question, answer_general_question, is_source_requested
 from app.api.deps import get_current_user_or_demo, verify_contract_access, filter_authorized_contracts
 
 router = APIRouter(prefix="/contracts/{contract_id}/chat", tags=["Contract Chat"])
@@ -46,10 +46,14 @@ def get_chat_history(
     messages = query.order_by(ChatMessage.created_at.asc()).all()
 
     formatted: List[MessageHistoryItem] = []
+    prev_user_asked_sources = False
     for m in messages:
+        if m.role == "user":
+            prev_user_asked_sources = is_source_requested(m.text or "")
         sources_list = parse_json_safely(m.sources, [])
         citations_list = parse_json_safely(m.citations, [])
         has_sources = bool(sources_list or citations_list)
+        show_sources = has_sources and m.role == "assistant" and prev_user_asked_sources
 
         formatted.append(MessageHistoryItem(
             id=m.id,
@@ -57,7 +61,7 @@ def get_chat_history(
             text=m.text,
             citations=citations_list,
             sources=sources_list,
-            show_sources=has_sources and m.role == "assistant",
+            show_sources=show_sources,
             created_at=m.created_at
         ))
     return formatted
@@ -91,13 +95,14 @@ def ask_contract_question(
             if existing_asst_msg:
                 sources_data = parse_json_safely(existing_asst_msg.sources, [])
                 citations_data = parse_json_safely(existing_asst_msg.citations, [])
+                prev_asked = is_source_requested(payload.message)
                 return {
                     "id": existing_asst_msg.id,
                     "role": "assistant",
                     "text": existing_asst_msg.text,
-                    "citations": citations_data,
+                    "citations": citations_data if prev_asked else [],
                     "sources": sources_data,
-                    "show_sources": bool(sources_data or citations_data),
+                    "show_sources": bool((sources_data or citations_data) and prev_asked),
                     "created_at": existing_asst_msg.created_at
                 }
 
@@ -118,14 +123,22 @@ def ask_contract_question(
         authorized_contracts = filter_authorized_contracts(db.query(Contract), current_user).all()
         contracts_meta = [
             {
+                "id": c.id,
                 "name": c.name,
                 "company": c.company,
+                "contract_type": c.contract_type,
                 "risk_level": c.risk_level,
-                "expiry_date": c.expiry_date
+                "start_date": c.start_date,
+                "expiry_date": c.expiry_date,
+                "renewal_date": c.renewal_date,
+                "notice_period": c.notice_period,
+                "payment_terms": c.payment_terms,
+                "penalty_info": c.penalty_info,
+                "summary": c.summary,
             }
             for c in authorized_contracts
         ]
-        rag_result = answer_general_question(payload.message, contracts_meta)
+        rag_result = answer_general_question(payload.message, contracts_meta, db=db)
 
         # Save assistant message
         asst_msg = ChatMessage(
@@ -183,7 +196,7 @@ def ask_contract_question(
         "vendor": contract.vendor
     }
 
-    rag_result = answer_contract_question(contract_id, payload.message, contract_meta)
+    rag_result = answer_contract_question(contract_id, payload.message, contract_meta, db=db)
 
     # Save assistant response with sources and citations
     sources_to_save = rag_result.get("sources", [])

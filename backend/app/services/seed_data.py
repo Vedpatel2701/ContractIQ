@@ -509,7 +509,7 @@ def seed_demo_contracts(db: Session, admin_user_id: Optional[str] = None) -> Lis
 
         # Vector Store chunking & pgvector indexing for RAG Assistant (only if not already indexed)
         try:
-            from app.models.contract_chunk import ContractChunk
+            from app.models.chunk import ContractChunk
             has_chunks = db.query(ContractChunk).filter(ContractChunk.contract_id == cid).first()
             if not has_chunks:
                 chunks = chunk_contract_text(extracted_text)

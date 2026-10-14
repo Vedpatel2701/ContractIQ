@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StatusBadge, RiskBadge, DemoBadge } from "@/components/ui/status-badge";
-import { fetchContractById } from "@/lib/api";
+import { fetchContractById, getAuthToken } from "@/lib/api";
 import type { ContractRecord } from "@/types/contracts";
 
 export default function ContractDetailPage() {
@@ -100,9 +100,7 @@ export default function ContractDetailPage() {
             </Button>
             <a
               href={`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1"}/contracts/${contract.id}/file${
-                typeof window !== "undefined" && (localStorage.getItem("contractiq_token") || localStorage.getItem("token"))
-                  ? `?token=${encodeURIComponent(localStorage.getItem("contractiq_token") || localStorage.getItem("token") || "")}`
-                  : ""
+                getAuthToken() ? `?token=${encodeURIComponent(getAuthToken()!)}` : ""
               }`}
               target="_blank"
               rel="noopener noreferrer"
