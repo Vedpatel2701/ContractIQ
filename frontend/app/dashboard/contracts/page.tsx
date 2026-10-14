@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,8 @@ export default function ContractsDirectoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     setCurrentUser(getCurrentUser());
   }, []);
@@ -30,7 +32,7 @@ export default function ContractsDirectoryPage() {
   const loadContractsData = () => {
     setIsLoading(true);
     setErrorMessage(null);
-    fetchContracts({ status, risk, search })
+    fetchContracts({ status, risk })
       .then((data) => {
         setContractList(data);
         setIsLoading(false);
@@ -43,17 +45,19 @@ export default function ContractsDirectoryPage() {
 
   useEffect(() => {
     loadContractsData();
-  }, [status, risk, search]);
+  }, [status, risk]);
 
+  // Real-time responsive filtering as the user types
   const filteredContracts = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
 
     return [...contractList].filter((contract) => {
       const matchesSearch =
         !normalizedSearch ||
-        contract.name.toLowerCase().includes(normalizedSearch) ||
-        contract.company.toLowerCase().includes(normalizedSearch) ||
-        contract.id.toLowerCase().includes(normalizedSearch);
+        (contract.name && contract.name.toLowerCase().includes(normalizedSearch)) ||
+        (contract.contractType && contract.contractType.toLowerCase().includes(normalizedSearch)) ||
+        (contract.company && contract.company.toLowerCase().includes(normalizedSearch)) ||
+        (contract.id && contract.id.toLowerCase().includes(normalizedSearch));
 
       const matchesStatus = status === "All" || contract.status === status;
       const matchesRisk = risk === "All" || contract.riskLevel === risk;
@@ -63,6 +67,18 @@ export default function ContractsDirectoryPage() {
   }, [contractList, search, status, risk]);
 
   const hasActiveFilters = search.trim() !== "" || status !== "All" || risk !== "All";
+
+  const handleClearSearch = () => {
+    setSearch("");
+    searchInputRef.current?.focus();
+  };
+
+  const handleResetAllFilters = () => {
+    setSearch("");
+    setStatus("All");
+    setRisk("All");
+    searchInputRef.current?.focus();
+  };
 
   return (
     <div className="space-y-5">
@@ -80,7 +96,7 @@ export default function ContractsDirectoryPage() {
 
       {/* Search & Compact Filters Toolbar */}
       <div className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 sm:flex-row sm:items-center sm:justify-between shadow-[var(--shadow-card)]">
-        {/* Search Bar */}
+        {/* Search Bar with Instant Clear-Search Control */}
         <div className="relative flex-1 max-w-md">
           <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--text-muted)] pointer-events-none">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -88,12 +104,31 @@ export default function ContractsDirectoryPage() {
             </svg>
           </span>
           <input
+            ref={searchInputRef}
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by contract name, company, or ID..."
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] py-1.5 pl-9 pr-3 text-xs sm:text-sm text-[var(--foreground)] placeholder:text-[var(--text-muted)] focus:border-blue-600 focus:bg-[var(--surface)] focus:outline-none transition-colors"
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                handleClearSearch();
+              }
+            }}
+            placeholder="Search by contract name, agreement type, counterparty, or ID..."
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] py-1.5 pl-9 pr-8 text-xs sm:text-sm text-[var(--foreground)] placeholder:text-[var(--text-muted)] focus:border-blue-600 focus:bg-[var(--surface)] focus:outline-none transition-colors"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={handleClearSearch}
+              className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-xs text-[var(--text-muted)] hover:text-[var(--foreground)] transition cursor-pointer"
+              aria-label="Clear search"
+              title="Clear search query (Esc)"
+            >
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-[10px] font-bold">
+                ✕
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Dropdown Filters & Counter */}
@@ -130,22 +165,42 @@ export default function ContractsDirectoryPage() {
 
           {hasActiveFilters && (
             <button
-              onClick={() => {
-                setSearch("");
-                setStatus("All");
-                setRisk("All");
-              }}
-              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-muted)] transition"
+              type="button"
+              onClick={handleResetAllFilters}
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-muted)] transition cursor-pointer"
+              title="Reset all search queries and filters"
             >
               Reset
             </button>
           )}
 
-          <span className="hidden lg:inline-flex items-center rounded-full bg-[var(--surface-muted)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--border)]">
-            {filteredContracts.length} {filteredContracts.length === 1 ? "agreement" : "agreements"}
+          <span className="hidden lg:inline-flex items-center rounded-full bg-[var(--surface-muted)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--border)] font-mono">
+            {filteredContracts.length} of {contractList.length}
           </span>
         </div>
       </div>
+
+      {/* Active Search Pill Bar */}
+      {search.trim() !== "" && (
+        <div className="flex items-center justify-between rounded-lg bg-blue-50 px-3 py-1.5 text-xs text-blue-900 dark:bg-blue-950/50 dark:text-blue-200 border border-blue-200/60 dark:border-blue-900/60">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">Searching:</span>
+            <span className="font-mono bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 font-bold">
+              "{search}"
+            </span>
+            <span className="text-[11px] text-[var(--text-secondary)]">
+              (matching contract names, agreement types, companies, or IDs)
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleClearSearch}
+            className="font-bold text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-100 underline cursor-pointer text-xs"
+          >
+            Clear Search
+          </button>
+        </div>
+      )}
 
       {/* Contract Listing */}
       {isLoading ? (
@@ -188,31 +243,42 @@ export default function ContractsDirectoryPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           }
-          title="No matching agreements found"
+          title={
+            search.trim()
+              ? `No contracts matching "${search}"`
+              : "No matching agreements found"
+          }
           description={
             search.trim()
-              ? `No contracts found matching "${search}" with the active status and risk filters.`
-              : "No contracts match the selected status and risk filters."
+              ? `We couldn't find any contracts matching "${search}" across names, types, or companies. Clear your search to restore the complete directory.`
+              : `No agreements match the selected status ("${status}") and risk ("${risk}") filters.`
           }
           action={
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                setSearch("");
-                setStatus("All");
-                setRisk("All");
-              }}
+              onClick={search.trim() ? handleClearSearch : handleResetAllFilters}
             >
-              Clear Search & Filters
+              {search.trim() ? "Clear Search" : "Reset Filters"}
             </Button>
+          }
+          secondaryAction={
+            search.trim() && (status !== "All" || risk !== "All") ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleResetAllFilters}
+              >
+                Reset All Filters
+              </Button>
+            ) : undefined
           }
         />
       ) : (
         <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)]">
           {/* Desktop Column Header */}
           <div className="hidden md:flex items-center px-4 py-2.5 bg-[var(--surface-muted)] border-b border-[var(--border)] text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-            <div className="flex-1 min-w-0 pr-6">Contract & Counterparty</div>
+            <div className="flex-1 min-w-0 pr-6">Contract, Type & Counterparty</div>
             <div className="w-36 shrink-0">Status</div>
             <div className="w-32 shrink-0">Risk</div>
             <div className="w-32 shrink-0">Expiration</div>
@@ -226,17 +292,29 @@ export default function ContractsDirectoryPage() {
                 key={contract.id}
                 className="group flex flex-col gap-3 p-3.5 sm:px-4 sm:py-3.5 transition-colors hover:bg-[var(--surface-muted)] md:flex-row md:items-center"
               >
-                {/* Column 1: Contract Name & Counterparty */}
+                {/* Column 1: Contract Name, Type & Counterparty */}
                 <div className="flex-1 min-w-0 md:pr-6">
-                  <Link
-                    href={`/dashboard/contracts/${contract.id}`}
-                    className="text-sm font-semibold text-[var(--foreground)] hover:text-blue-600 dark:hover:text-blue-400 transition-colors line-clamp-1"
-                  >
-                    {contract.name}
-                  </Link>
-                  <p className="text-xs text-[var(--text-secondary)] mt-0.5 truncate">
-                    {contract.company}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/dashboard/contracts/${contract.id}`}
+                      className="text-sm font-semibold text-[var(--foreground)] hover:text-blue-600 dark:hover:text-blue-400 transition-colors line-clamp-1"
+                    >
+                      {contract.name}
+                    </Link>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-[var(--text-secondary)] mt-0.5">
+                    <span className="font-medium text-[var(--foreground)] truncate max-w-[180px]">{contract.company}</span>
+                    {contract.contractType && (
+                      <>
+                        <span className="text-[var(--text-muted)]">•</span>
+                        <span className="rounded bg-slate-100 dark:bg-slate-800/80 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 dark:text-slate-300">
+                          {contract.contractType}
+                        </span>
+                      </>
+                    )}
+                    <span className="text-[var(--text-muted)]">•</span>
+                    <span className="font-mono text-[11px] text-[var(--text-muted)]">{contract.id}</span>
+                  </div>
                 </div>
 
                 {/* Column 2: Status */}

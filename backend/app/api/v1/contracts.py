@@ -71,7 +71,12 @@ def get_contracts(
         query = query.filter(Contract.risk_level == risk)
     if search:
         search_fmt = f"%{search}%"
-        query = query.filter((Contract.name.ilike(search_fmt)) | (Contract.company.ilike(search_fmt)) | (Contract.id.ilike(search_fmt)))
+        query = query.filter(
+            (Contract.name.ilike(search_fmt)) |
+            (Contract.contract_type.ilike(search_fmt)) |
+            (Contract.company.ilike(search_fmt)) |
+            (Contract.id.ilike(search_fmt))
+        )
         
     contracts = query.order_by(Contract.created_at.desc()).all()
     return [format_contract_response(c) for c in contracts]
