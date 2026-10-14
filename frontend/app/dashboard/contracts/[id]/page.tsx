@@ -7,6 +7,7 @@ import React, { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge, RiskBadge, DemoBadge } from "@/components/ui/status-badge";
 import { fetchContractById, getAuthToken, getCurrentUser, canDeleteContracts, deleteContract, type UserRecord } from "@/lib/api";
 import type { ContractRecord } from "@/types/contracts";
@@ -82,14 +83,18 @@ export default function ContractDetailPage() {
         <PageHeader
           backHref="/dashboard/contracts"
           backLabel="Contracts"
-          title="Contract not found"
-          description="The requested agreement could not be located in your workspace."
+          title="Contract Not Found"
+          description="The requested agreement could not be located in your authorized repository."
         />
-        <div className="pt-2">
-          <Button href="/dashboard/contracts" variant="outline">
-            ← Back to Contracts
-          </Button>
-        </div>
+        <EmptyState
+          title="Agreement not found"
+          description="The contract may have been deleted, moved, or you may lack permission to view it."
+          action={
+            <Button href="/dashboard/contracts" variant="outline" size="sm">
+              ← Return to Contract Directory
+            </Button>
+          }
+        />
       </div>
     );
   }

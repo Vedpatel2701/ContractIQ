@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge, RiskBadge } from "@/components/ui/status-badge";
 import { fetchContracts, getCurrentUser, type UserRecord } from "@/lib/api";
 import type { ContractRecord } from "@/types/contracts";
@@ -20,29 +21,28 @@ export default function ContractsDirectoryPage() {
   const [status, setStatus] = useState<(typeof statusOptions)[number]>("All");
   const [risk, setRisk] = useState<(typeof riskOptions)[number]>("All");
   const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setCurrentUser(getCurrentUser());
   }, []);
 
-  useEffect(() => {
-    let mounted = true;
+  const loadContractsData = () => {
+    setIsLoading(true);
+    setErrorMessage(null);
     fetchContracts({ status, risk, search })
       .then((data) => {
-        if (mounted) {
-          setContractList(data);
-          setIsLoading(false);
-        }
+        setContractList(data);
+        setIsLoading(false);
       })
-      .catch(() => {
-        if (mounted) {
-          setIsLoading(false);
-        }
+      .catch((err) => {
+        setErrorMessage(err?.message || "Failed to load contract directory.");
+        setIsLoading(false);
       });
+  };
 
-    return () => {
-      mounted = false;
-    };
+  useEffect(() => {
+    loadContractsData();
   }, [status, risk, search]);
 
   const filteredContracts = useMemo(() => {
@@ -154,18 +154,47 @@ export default function ContractsDirectoryPage() {
             <div key={i} className="h-16 animate-pulse rounded-xl border border-[var(--border)] bg-[var(--surface)]" />
           ))}
         </div>
-      ) : filteredContracts.length === 0 ? (
-        <Card className="flex flex-col items-center justify-center p-12 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      ) : errorMessage ? (
+        <EmptyState
+          icon={
+            <svg className="h-6 w-6 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-          </div>
-          <p className="mt-3 text-base font-bold text-[var(--foreground)]">No matching contracts found</p>
-          <p className="mt-1 text-xs text-[var(--text-secondary)]">
-            Try adjusting your search query or status and risk filters.
-          </p>
-          <div className="mt-4">
+          }
+          title="Unable to load contracts"
+          description={errorMessage}
+          action={
+            <Button variant="outline" size="sm" onClick={loadContractsData}>
+              Retry Connection
+            </Button>
+          }
+        />
+      ) : contractList.length === 0 ? (
+        <EmptyState
+          title="No contracts in workspace"
+          description="Your contract repository is currently empty. Upload agreements to extract key provisions, detect legal risks, and monitor renewal deadlines."
+          action={
+            currentUser?.role !== "VIEWER" ? (
+              <Button href="/dashboard/contracts/upload" size="sm">
+                + Upload Contract
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : filteredContracts.length === 0 ? (
+        <EmptyState
+          icon={
+            <svg className="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          }
+          title="No matching agreements found"
+          description={
+            search.trim()
+              ? `No contracts found matching "${search}" with the active status and risk filters.`
+              : "No contracts match the selected status and risk filters."
+          }
+          action={
             <Button
               variant="outline"
               size="sm"
@@ -175,10 +204,10 @@ export default function ContractsDirectoryPage() {
                 setRisk("All");
               }}
             >
-              Reset Filters
+              Clear Search & Filters
             </Button>
-          </div>
-        </Card>
+          }
+        />
       ) : (
         <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)]">
           {/* Desktop Column Header */}

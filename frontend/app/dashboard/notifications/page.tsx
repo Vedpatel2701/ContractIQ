@@ -6,8 +6,9 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { DemoBadge } from "@/components/ui/status-badge";
-import { fetchNotifications } from "@/lib/api";
+import { fetchNotifications, getCurrentUser, type UserRecord } from "@/lib/api";
 
 type NotificationItem = {
   id: string | number;
@@ -20,72 +21,41 @@ type NotificationItem = {
   is_demo?: boolean;
 };
 
-const defaultFallbackNotifications: NotificationItem[] = [
-  {
-    id: "notif-1",
-    contract_id: "CON-1098",
-    title: "Legal Review Required: Vendor Services Master Agreement",
-    description: "Agreement with Apex Operations has elevated risk factors ('High'). Broad indemnity language and service credit terms require legal review.",
-    alert_type: "risk",
-    is_read: false,
-    is_demo: false,
-  },
-  {
-    id: "notif-2",
-    contract_id: "CON-1042",
-    title: "Renewal Deadline Approaching: Enterprise SaaS Agreement",
-    description: "Renewal scheduled for 2026-08-28. Notice window requirement: 30 days before renewal.",
-    alert_type: "renewal",
-    is_read: false,
-    is_demo: false,
-  },
-  {
-    id: "notif-3",
-    contract_id: "CON-1120",
-    title: "Payment & SLA Notice: Manufacturing Supply Agreement",
-    description: "Quarterly purchase commitments with Vertex Manufacturing. Delivery delays trigger liquidated damages up to 8% of affected order value.",
-    alert_type: "payment",
-    is_read: false,
-    is_demo: false,
-  },
-  {
-    id: "notif-4",
-    contract_id: "DEMO-105",
-    title: "Renewal Window Approaching: Office Lease Agreement",
-    description: "Corporate HQ Lease extension option notice deadline is approaching. Confirm terms 60 days in advance.",
-    alert_type: "renewal",
-    is_read: true,
-    is_demo: true,
-  },
-  {
-    id: "notif-5",
-    contract_id: "DEMO-104",
-    title: "Contract Expired: Software License Agreement",
-    description: "Legacy software licensing agreement expired. Final IP transition sign-off remains outstanding.",
-    alert_type: "expiry",
-    is_read: true,
-    is_demo: true,
-  },
-];
-
 export default function NotificationsPage() {
-  const [items, setItems] = useState<NotificationItem[]>(defaultFallbackNotifications);
+  const [items, setItems] = useState<NotificationItem[]>([]);
   const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserRecord | null>(null);
 
   useEffect(() => {
+    setCurrentUser(getCurrentUser());
+  }, []);
+
+  const loadNotificationsData = () => {
+    setIsLoading(true);
+    setErrorMessage(null);
     fetchNotifications()
       .then((data) => {
-        if (data && data.length > 0) {
+        if (Array.isArray(data)) {
           const formatted = data.map((d: NotificationItem) => ({
             ...d,
             is_demo: d.contract_id?.startsWith("DEMO-") ?? false,
           }));
           setItems(formatted);
+        } else {
+          setItems([]);
         }
+        setIsLoading(false);
       })
-      .catch(() => {
-        // Fallback initialized in state
+      .catch((err) => {
+        setErrorMessage(err?.message || "Failed to load notifications from server.");
+        setIsLoading(false);
       });
+  };
+
+  useEffect(() => {
+    loadNotificationsData();
   }, []);
 
   const unreadCount = items.filter((item) => !(item.is_read ?? item.read)).length;
@@ -113,7 +83,7 @@ export default function NotificationsPage() {
               variant="outline"
               size="sm"
               onClick={handleMarkAllRead}
-              disabled={unreadCount === 0}
+              disabled={unreadCount === 0 || isLoading}
             >
               Mark all read
             </Button>
@@ -147,23 +117,66 @@ export default function NotificationsPage() {
         </button>
       </div>
 
-      {/* Feed List */}
-      {visibleItems.length === 0 ? (
-        <Card className="flex flex-col items-center justify-center p-12 text-center space-y-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--surface-muted)] text-[var(--text-muted)] border border-[var(--border)]">
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+      {/* Feed List or Empty States */}
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-24 animate-pulse rounded-xl border border-[var(--border)] bg-[var(--surface)]" />
+          ))}
+        </div>
+      ) : errorMessage ? (
+        <EmptyState
+          icon={
+            <svg className="h-6 w-6 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-[var(--foreground)]">
-              {filter === "unread" ? "All alerts caught up" : "No notifications"}
-            </h3>
-            <p className="mt-1 text-xs text-[var(--text-secondary)]">
-              Approaching renewal notice windows, payment alerts, and risk indicators will be logged here.
-            </p>
-          </div>
-        </Card>
+          }
+          title="Unable to load notifications"
+          description={errorMessage}
+          action={
+            <Button variant="outline" size="sm" onClick={loadNotificationsData}>
+              Retry Connection
+            </Button>
+          }
+        />
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={
+            <svg className="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
+          variant="card"
+          title="No notifications or alerts"
+          description="All caught up! ContractIQ monitors your contracts in the background and will automatically alert you about upcoming renewal windows, notice deadlines, and elevated legal risks."
+          action={
+            currentUser?.role !== "VIEWER" ? (
+              <Button href="/dashboard/contracts/upload" size="sm">
+                + Analyze Contract
+              </Button>
+            ) : (
+              <Button href="/dashboard/contracts" variant="outline" size="sm">
+                Browse Contracts
+              </Button>
+            )
+          }
+        />
+      ) : visibleItems.length === 0 ? (
+        <EmptyState
+          icon={
+            <svg className="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          }
+          variant="card"
+          title="All alerts caught up"
+          description="You have reviewed all outstanding notifications. Switch to view all alerts to browse past notifications and historical records."
+          action={
+            <Button variant="outline" size="sm" onClick={() => setFilter("all")}>
+              View All Alerts ({items.length})
+            </Button>
+          }
+        />
       ) : (
         <div className="space-y-3">
           {visibleItems.map((item) => {
@@ -222,7 +235,7 @@ export default function NotificationsPage() {
                     <button
                       type="button"
                       onClick={() => handleDismiss(item.id)}
-                      className="text-xs text-[var(--text-muted)] hover:text-[var(--foreground)] font-medium px-1"
+                      className="text-xs text-[var(--text-muted)] hover:text-[var(--foreground)] font-medium px-1 cursor-pointer"
                     >
                       Dismiss
                     </button>

@@ -5,9 +5,12 @@ import { useEffect, useState, useMemo } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { RiskBadge, StatusBadge } from "@/components/ui/status-badge";
 import {
   fetchDashboardData,
+  getCurrentUser,
+  type UserRecord,
   type DashboardResponse,
   type DeadlineItem,
   type RecentActivityItem,
@@ -30,6 +33,7 @@ export default function EnterpriseDashboardPage() {
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserRecord | null>(null);
 
   // Deadline Tracker Interactive States
   const [activeTab, setActiveTab] = useState<DeadlineFilterTab>("ALL");
@@ -47,6 +51,10 @@ export default function EnterpriseDashboardPage() {
     return new Date(2026, 9, 1);
   });
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCurrentUser(getCurrentUser());
+  }, []);
 
   const loadData = async () => {
     setLoading(true);
@@ -207,25 +215,68 @@ export default function EnterpriseDashboardPage() {
 
   if (error || !data) {
     return (
-      <div className="p-8 text-center space-y-4">
-        <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400">
-          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        </div>
-        <h3 className="text-lg font-bold text-[var(--foreground)]">Failed to load dashboard intelligence</h3>
-        <p className="text-sm text-[var(--text-secondary)] max-w-md mx-auto">{error || "Could not retrieve contract portfolio metrics."}</p>
-        <button
-          onClick={loadData}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 transition"
-        >
-          Retry Connection
-        </button>
+      <div className="space-y-6">
+        <PageHeader
+          eyebrow="Enterprise Portfolio Intelligence"
+          title="ContractIQ Command Center"
+          description="Real-time portfolio analytics, automated legal risk monitoring, and proactive deadline management."
+        />
+        <EmptyState
+          icon={
+            <svg className="h-6 w-6 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          }
+          title="Unable to load dashboard intelligence"
+          description={error || "Could not retrieve contract portfolio metrics from the server."}
+          action={
+            <Button onClick={loadData} size="sm">
+              Retry Connection
+            </Button>
+          }
+        />
       </div>
     );
   }
 
   const { executiveOverview, smartInsights, recentActivity } = data;
+
+  // Genuinely Empty Workspace Portfolio (0 contracts in database)
+  if (executiveOverview.totalContracts === 0) {
+    return (
+      <div className="space-y-8 pb-12">
+        <PageHeader
+          eyebrow="Enterprise Portfolio Intelligence"
+          title="ContractIQ Command Center"
+          description="Real-time portfolio analytics, automated legal risk monitoring, and proactive deadline management."
+          actions={
+            currentUser?.role !== "VIEWER" ? (
+              <Button href="/dashboard/contracts/upload" size="md">
+                + Analyze Contract
+              </Button>
+            ) : undefined
+          }
+        />
+
+        <EmptyState
+          icon={
+            <svg className="h-7 w-7 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          }
+          title="No contracts in workspace portfolio"
+          description="Upload and analyze your commercial agreements in PDF, DOCX, or scanned formats to view executive KPI metrics, automated risk distributions, and proactive deadline tracking."
+          action={
+            currentUser?.role !== "VIEWER" ? (
+              <Button href="/dashboard/contracts/upload" size="sm">
+                + Upload First Contract
+              </Button>
+            ) : undefined
+          }
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 pb-12">
@@ -239,9 +290,11 @@ export default function EnterpriseDashboardPage() {
             <Button href="/dashboard/assistant" variant="outline" size="md">
               💬 AI Assistant
             </Button>
-            <Button href="/dashboard/contracts/upload" size="md">
-              + Analyze Contract
-            </Button>
+            {currentUser?.role !== "VIEWER" && (
+              <Button href="/dashboard/contracts/upload" size="md">
+                + Analyze Contract
+              </Button>
+            )}
           </div>
         }
       />
@@ -654,142 +707,198 @@ export default function EnterpriseDashboardPage() {
 
         {/* Tab 1: High-Risk Alerts */}
         {insightTab === "RISKS" && (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div>
             {smartInsights.highRiskAlerts.length === 0 ? (
-              <p className="text-xs text-[var(--text-muted)] col-span-2 py-4">No high-risk contracts flagged.</p>
+              <EmptyState
+                variant="card"
+                icon={
+                  <svg className="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                }
+                title="No high-risk contracts flagged"
+                description="No agreements in your authorized portfolio exhibit critical risk exposures, uncapped liabilities, or severe commercial exposure."
+              />
             ) : (
-              smartInsights.highRiskAlerts.map((alert, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-xl border border-rose-200/80 bg-rose-50/40 dark:border-rose-900/60 dark:bg-rose-950/20 p-4 space-y-2 transition hover:shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
+              <div className="grid gap-3 md:grid-cols-2">
+                {smartInsights.highRiskAlerts.map((alert, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-xl border border-rose-200/80 bg-rose-50/40 dark:border-rose-900/60 dark:bg-rose-950/20 p-4 space-y-2 transition hover:shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <Link
+                          href={`/dashboard/contracts/${alert.contractId}`}
+                          className="text-xs font-bold text-[var(--foreground)] hover:text-blue-600 transition"
+                        >
+                          {alert.contractName}
+                        </Link>
+                        <p className="text-[11px] text-[var(--text-muted)]">{alert.company}</p>
+                      </div>
+                      <span className="shrink-0 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200">
+                        {alert.riskLevel}
+                      </span>
+                    </div>
+                    <p className="text-xs text-rose-900 dark:text-rose-200 font-medium leading-relaxed">
+                      {alert.alert}
+                    </p>
+                    <div className="pt-1 border-t border-rose-200/60 dark:border-rose-900/40 flex items-center justify-between text-[11px]">
+                      <span className="text-[var(--text-secondary)] italic">Action: {alert.recommendation}</span>
                       <Link
                         href={`/dashboard/contracts/${alert.contractId}`}
-                        className="text-xs font-bold text-[var(--foreground)] hover:text-blue-600 transition"
+                        className="font-bold text-blue-600 hover:underline dark:text-blue-400 shrink-0 ml-2"
                       >
-                        {alert.contractName}
+                        Inspect →
                       </Link>
-                      <p className="text-[11px] text-[var(--text-muted)]">{alert.company}</p>
                     </div>
-                    <span className="shrink-0 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200">
-                      {alert.riskLevel}
-                    </span>
                   </div>
-                  <p className="text-xs text-rose-900 dark:text-rose-200 font-medium leading-relaxed">
-                    {alert.alert}
-                  </p>
-                  <div className="pt-1 border-t border-rose-200/60 dark:border-rose-900/40 flex items-center justify-between text-[11px]">
-                    <span className="text-[var(--text-secondary)] italic">Action: {alert.recommendation}</span>
-                    <Link
-                      href={`/dashboard/contracts/${alert.contractId}`}
-                      className="font-bold text-blue-600 hover:underline dark:text-blue-400 shrink-0 ml-2"
-                    >
-                      Inspect →
-                    </Link>
-                  </div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
         )}
 
         {/* Tab 2: Imminent Deadlines */}
         {insightTab === "DEADLINES" && (
-          <div className="grid gap-3 md:grid-cols-2">
-            {smartInsights.upcomingDeadlines.map((dl, idx) => (
-              <div
-                key={idx}
-                className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-2 hover:border-blue-400 transition"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[var(--foreground)] truncate max-w-[220px]">
-                    {dl.contractName}
-                  </span>
-                  <span
-                    className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                      dl.daysRemaining !== null && dl.daysRemaining < 0
-                        ? "bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200"
-                        : dl.daysRemaining !== null && dl.daysRemaining <= 30
-                        ? "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
-                        : "bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200"
-                    }`}
+          <div>
+            {smartInsights.upcomingDeadlines.length === 0 ? (
+              <EmptyState
+                variant="card"
+                icon={
+                  <svg className="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                }
+                title="No imminent contract deadlines"
+                description="There are currently no contract expirations, renewal commencements, or notice deadlines scheduled in the near term."
+              />
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2">
+                {smartInsights.upcomingDeadlines.map((dl, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-2 hover:border-blue-400 transition"
                   >
-                    {dl.daysRemaining !== null && dl.daysRemaining < 0
-                      ? `${Math.abs(dl.daysRemaining)}d OVERDUE`
-                      : `${dl.daysRemaining}d REMAINING`}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
-                  <span className="font-semibold text-blue-600 dark:text-blue-400">{dl.typeLabel}:</span>
-                  <span className="font-mono font-medium">{dl.date || "Unspecified"}</span>
-                  <span>•</span>
-                  <span>{dl.company}</span>
-                </div>
-                <p className="text-xs text-[var(--text-secondary)] bg-[var(--surface-muted)] p-2 rounded-md">
-                  {dl.action}
-                </p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[var(--foreground)] truncate max-w-[220px]">
+                        {dl.contractName}
+                      </span>
+                      <span
+                        className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                          dl.daysRemaining !== null && dl.daysRemaining < 0
+                            ? "bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200"
+                            : dl.daysRemaining !== null && dl.daysRemaining <= 30
+                            ? "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
+                            : "bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200"
+                        }`}
+                      >
+                        {dl.daysRemaining !== null && dl.daysRemaining < 0
+                          ? `${Math.abs(dl.daysRemaining)}d OVERDUE`
+                          : `${dl.daysRemaining}d REMAINING`}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+                      <span className="font-semibold text-blue-600 dark:text-blue-400">{dl.typeLabel}:</span>
+                      <span className="font-mono font-medium">{dl.date || "Unspecified"}</span>
+                      <span>•</span>
+                      <span>{dl.company}</span>
+                    </div>
+                    <p className="text-xs text-[var(--text-secondary)] bg-[var(--surface-muted)] p-2 rounded-md">
+                      {dl.action}
+                    </p>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
 
         {/* Tab 3: Missing & Problematic Clauses */}
         {insightTab === "CLAUSES" && (
-          <div className="grid gap-3 md:grid-cols-2">
-            {smartInsights.missingOrProblematicClauses.map((clause, idx) => (
-              <div
-                key={idx}
-                className="rounded-xl border border-amber-200/80 bg-amber-50/40 dark:border-amber-900/50 dark:bg-amber-950/20 p-4 space-y-2"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-bold text-[var(--foreground)]">{clause.contractName}</p>
-                    <p className="text-[11px] text-[var(--text-muted)]">{clause.company}</p>
+          <div>
+            {smartInsights.missingOrProblematicClauses.length === 0 ? (
+              <EmptyState
+                variant="card"
+                icon={
+                  <svg className="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                }
+                title="No clause concerns detected"
+                description="All agreements in your portfolio contain standard commercial provisions and explicit duration terms."
+              />
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2">
+                {smartInsights.missingOrProblematicClauses.map((clause, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-xl border border-amber-200/80 bg-amber-50/40 dark:border-amber-900/50 dark:bg-amber-950/20 p-4 space-y-2"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-bold text-[var(--foreground)]">{clause.contractName}</p>
+                        <p className="text-[11px] text-[var(--text-muted)]">{clause.company}</p>
+                      </div>
+                      <span className="shrink-0 rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-900 dark:bg-amber-900 dark:text-amber-200">
+                        {clause.category}
+                      </span>
+                    </div>
+                    <p className="text-xs text-amber-900 dark:text-amber-200 font-medium">
+                      {clause.issue}
+                    </p>
+                    <p className="text-[11px] text-[var(--text-secondary)] pt-1 border-t border-amber-200/60 dark:border-amber-900/40">
+                      <span className="font-semibold text-[var(--foreground)]">Remedy:</span> {clause.recommendedRemedy}
+                    </p>
                   </div>
-                  <span className="shrink-0 rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-900 dark:bg-amber-900 dark:text-amber-200">
-                    {clause.category}
-                  </span>
-                </div>
-                <p className="text-xs text-amber-900 dark:text-amber-200 font-medium">
-                  {clause.issue}
-                </p>
-                <p className="text-[11px] text-[var(--text-secondary)] pt-1 border-t border-amber-200/60 dark:border-amber-900/40">
-                  <span className="font-semibold text-[var(--foreground)]">Remedy:</span> {clause.recommendedRemedy}
-                </p>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
 
         {/* Tab 4: Action Items */}
         {insightTab === "ACTIONS" && (
-          <div className="space-y-2">
-            {smartInsights.actionableRecommendations.map((act, idx) => (
-              <div
-                key={idx}
-                className="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-muted)] transition"
-              >
-                <div className="min-w-0 flex-1 pr-4">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`h-2 w-2 rounded-full ${
-                        act.priority === "High" ? "bg-rose-500" : "bg-amber-500"
-                      }`}
-                    />
-                    <span className="text-xs font-bold text-[var(--foreground)]">{act.contractName}</span>
-                    <span className="text-[11px] font-mono text-[var(--text-muted)]">({act.company})</span>
+          <div>
+            {smartInsights.actionableRecommendations.length === 0 ? (
+              <EmptyState
+                variant="card"
+                icon={
+                  <svg className="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                }
+                title="No pending actions required"
+                description="All contract obligations, renewal options, and legal action items across your portfolio are currently satisfied."
+              />
+            ) : (
+              <div className="space-y-2">
+                {smartInsights.actionableRecommendations.map((act, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-muted)] transition"
+                  >
+                    <div className="min-w-0 flex-1 pr-4">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`h-2 w-2 rounded-full ${
+                            act.priority === "High" ? "bg-rose-500" : "bg-amber-500"
+                          }`}
+                        />
+                        <span className="text-xs font-bold text-[var(--foreground)]">{act.contractName}</span>
+                        <span className="text-[11px] font-mono text-[var(--text-muted)]">({act.company})</span>
+                      </div>
+                      <p className="mt-1 text-xs text-[var(--text-secondary)]">{act.recommendation}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <span className="inline-block rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+                        {act.timing}
+                      </span>
+                    </div>
                   </div>
-                  <p className="mt-1 text-xs text-[var(--text-secondary)]">{act.recommendation}</p>
-                </div>
-                <div className="shrink-0 text-right">
-                  <span className="inline-block rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-800 dark:bg-slate-800 dark:text-slate-200">
-                    {act.timing}
-                  </span>
-                </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
       </section>
@@ -825,7 +934,8 @@ export default function EnterpriseDashboardPage() {
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-2 top-2 text-xs text-slate-400 hover:text-slate-600"
+                  className="absolute right-2 top-2 text-xs text-slate-400 hover:text-slate-600 cursor-pointer"
+                  title="Clear search query"
                 >
                   ✕
                 </button>
@@ -852,7 +962,7 @@ export default function EnterpriseDashboardPage() {
                   setViewMode("list");
                   setSelectedCalendarDate(null);
                 }}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1 font-bold transition ${
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1 font-bold transition cursor-pointer ${
                   viewMode === "list"
                     ? "bg-white text-blue-700 shadow-sm dark:bg-slate-800 dark:text-blue-400"
                     : "text-[var(--text-secondary)] hover:text-[var(--foreground)]"
@@ -863,7 +973,7 @@ export default function EnterpriseDashboardPage() {
               <button
                 type="button"
                 onClick={() => setViewMode("calendar")}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1 font-bold transition ${
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1 font-bold transition cursor-pointer ${
                   viewMode === "calendar"
                     ? "bg-white text-blue-700 shadow-sm dark:bg-slate-800 dark:text-blue-400"
                     : "text-[var(--text-secondary)] hover:text-[var(--foreground)]"
@@ -882,7 +992,7 @@ export default function EnterpriseDashboardPage() {
               setActiveTab("ALL");
               setSelectedCalendarDate(null);
             }}
-            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
               activeTab === "ALL"
                 ? "bg-slate-900 text-white dark:bg-blue-600 shadow-sm"
                 : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]"
@@ -895,7 +1005,7 @@ export default function EnterpriseDashboardPage() {
               setActiveTab("EXPIRY");
               setSelectedCalendarDate(null);
             }}
-            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
               activeTab === "EXPIRY"
                 ? "bg-blue-700 text-white dark:bg-blue-600 shadow-sm"
                 : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]"
@@ -908,7 +1018,7 @@ export default function EnterpriseDashboardPage() {
               setActiveTab("RENEWAL");
               setSelectedCalendarDate(null);
             }}
-            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
               activeTab === "RENEWAL"
                 ? "bg-blue-700 text-white dark:bg-blue-600 shadow-sm"
                 : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]"
@@ -921,7 +1031,7 @@ export default function EnterpriseDashboardPage() {
               setActiveTab("NOTICE");
               setSelectedCalendarDate(null);
             }}
-            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
               activeTab === "NOTICE"
                 ? "bg-blue-700 text-white dark:bg-blue-600 shadow-sm"
                 : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]"
@@ -934,7 +1044,7 @@ export default function EnterpriseDashboardPage() {
               setActiveTab("UPCOMING");
               setSelectedCalendarDate(null);
             }}
-            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
               activeTab === "UPCOMING"
                 ? "bg-emerald-700 text-white dark:bg-emerald-600 shadow-sm"
                 : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]"
@@ -947,7 +1057,7 @@ export default function EnterpriseDashboardPage() {
               setActiveTab("OVERDUE");
               setSelectedCalendarDate(null);
             }}
-            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
               activeTab === "OVERDUE"
                 ? "bg-rose-700 text-white dark:bg-rose-600 shadow-sm"
                 : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]"
@@ -960,7 +1070,7 @@ export default function EnterpriseDashboardPage() {
               setActiveTab("MISSING");
               setSelectedCalendarDate(null);
             }}
-            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
               activeTab === "MISSING"
                 ? "bg-slate-700 text-white dark:bg-slate-600 shadow-sm"
                 : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]"
@@ -977,7 +1087,7 @@ export default function EnterpriseDashboardPage() {
             </span>
             <button
               onClick={() => setSelectedCalendarDate(null)}
-              className="font-bold underline hover:text-blue-700"
+              className="font-bold underline hover:text-blue-700 cursor-pointer"
             >
               Clear date filter
             </button>
@@ -987,27 +1097,94 @@ export default function EnterpriseDashboardPage() {
         {/* View Mode: List / Table View */}
         {viewMode === "list" ? (
           <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)]">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-[var(--border)] bg-[var(--surface-muted)] text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                  <tr>
-                    <th className="py-3 px-4">Contract / Entity</th>
-                    <th className="py-3 px-3">Deadline Type</th>
-                    <th className="py-3 px-3">Relevant Date</th>
-                    <th className="py-3 px-3">Status / Days</th>
-                    <th className="py-3 px-4">Required Action</th>
-                    <th className="py-3 px-3 text-right">Side Preview</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border)]">
-                  {filteredDeadlines.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-8 text-center text-xs text-[var(--text-muted)]">
-                        No deadline records match the active filters.
-                      </td>
-                    </tr>
+            {filteredDeadlines.length === 0 ? (
+              <EmptyState
+                variant="card"
+                className="border-0 shadow-none py-12"
+                icon={
+                  activeTab === "OVERDUE" || activeTab === "MISSING" ? (
+                    <svg className="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : searchQuery.trim() ? (
+                    <svg className="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
                   ) : (
-                    filteredDeadlines.map((item) => {
+                    <svg className="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  )
+                }
+                title={
+                  searchQuery.trim()
+                    ? `No deadlines matching "${searchQuery}"`
+                    : activeTab === "EXPIRY"
+                    ? "No upcoming contract expirations"
+                    : activeTab === "RENEWAL"
+                    ? "No upcoming contract renewals"
+                    : activeTab === "NOTICE"
+                    ? "No active notice cutoff deadlines"
+                    : activeTab === "OVERDUE"
+                    ? "Zero overdue deadlines"
+                    : activeTab === "MISSING"
+                    ? "All contract terms defined"
+                    : dateRange !== "ALL"
+                    ? "No deadlines within selected range"
+                    : "No contract deadlines recorded"
+                }
+                description={
+                  searchQuery.trim()
+                    ? `No deadline events match "${searchQuery}". Clear your search term to see all deadlines.`
+                    : activeTab === "EXPIRY"
+                    ? "None of your authorized contracts have impending expiration dates."
+                    : activeTab === "RENEWAL"
+                    ? "There are currently no active contracts scheduled for renewal."
+                    : activeTab === "NOTICE"
+                    ? "All advance written notice requirements are currently satisfied or outside tracking windows."
+                    : activeTab === "OVERDUE"
+                    ? "All renewal windows, notice deadlines, and contract terms are current and up to date."
+                    : activeTab === "MISSING"
+                    ? "None of your contracts are missing definitive expiration or renewal terms."
+                    : dateRange !== "ALL"
+                    ? "No contract dates recorded for this date range horizon."
+                    : "Tracked agreements do not currently have any approaching event horizons."
+                }
+                action={
+                  searchQuery.trim() ? (
+                    <Button variant="outline" size="sm" onClick={() => setSearchQuery("")}>
+                      Clear Search
+                    </Button>
+                  ) : activeTab !== "ALL" ? (
+                    <Button variant="outline" size="sm" onClick={() => setActiveTab("ALL")}>
+                      View All Deadlines
+                    </Button>
+                  ) : dateRange !== "ALL" ? (
+                    <Button variant="outline" size="sm" onClick={() => setDateRange("ALL")}>
+                      Reset Date Range
+                    </Button>
+                  ) : currentUser?.role !== "VIEWER" ? (
+                    <Button href="/dashboard/contracts/upload" size="sm">
+                      + Analyze Contract
+                    </Button>
+                  ) : undefined
+                }
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-[var(--border)] bg-[var(--surface-muted)] text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                    <tr>
+                      <th className="py-3 px-4">Contract / Entity</th>
+                      <th className="py-3 px-3">Deadline Type</th>
+                      <th className="py-3 px-3">Relevant Date</th>
+                      <th className="py-3 px-3">Status / Days</th>
+                      <th className="py-3 px-4">Required Action</th>
+                      <th className="py-3 px-3 text-right">Side Preview</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)]">
+                    {filteredDeadlines.map((item) => {
                       const isOverdue = item.daysRemaining !== null && item.daysRemaining < 0;
                       const isToday = item.daysRemaining === 0;
                       const isUrgent = item.daysRemaining !== null && item.daysRemaining > 0 && item.daysRemaining <= 30;
@@ -1095,18 +1272,18 @@ export default function EnterpriseDashboardPage() {
                                 e.stopPropagation();
                                 setSelectedContract(item);
                               }}
-                              className="rounded border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-bold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition"
+                              className="rounded border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-bold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition cursor-pointer"
                             >
                               Inspect Details →
                             </button>
                           </td>
                         </tr>
                       );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         ) : (
           /* View Mode: Calendar View */
@@ -1123,7 +1300,7 @@ export default function EnterpriseDashboardPage() {
                       )
                     )
                   }
-                  className="rounded-md border border-[var(--border)] px-2 py-1 text-xs font-bold hover:bg-[var(--surface-muted)]"
+                  className="rounded-md border border-[var(--border)] px-2 py-1 text-xs font-bold hover:bg-[var(--surface-muted)] cursor-pointer"
                 >
                   ← Prev
                 </button>
@@ -1143,7 +1320,7 @@ export default function EnterpriseDashboardPage() {
                       )
                     )
                   }
-                  className="rounded-md border border-[var(--border)] px-2 py-1 text-xs font-bold hover:bg-[var(--surface-muted)]"
+                  className="rounded-md border border-[var(--border)] px-2 py-1 text-xs font-bold hover:bg-[var(--surface-muted)] cursor-pointer"
                 >
                   Next →
                 </button>
@@ -1252,35 +1429,44 @@ export default function EnterpriseDashboardPage() {
         </div>
 
         <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)]">
-          <div className="divide-y divide-[var(--border)]">
-            {recentActivity.map((act) => (
-              <div
-                key={act.id}
-                className="flex items-center justify-between p-3.5 transition hover:bg-[var(--surface-muted)]"
-              >
-                <div className="min-w-0 flex-1 pr-4">
-                  <Link
-                    href={`/dashboard/contracts/${act.id}`}
-                    className="text-xs font-bold text-[var(--foreground)] hover:text-blue-600 transition truncate block"
-                  >
-                    {act.title}
-                  </Link>
-                  <p className="mt-0.5 text-[11px] text-[var(--text-secondary)]">
-                    {act.company} • Updated {act.lastUpdated}
-                  </p>
+          {recentActivity.length === 0 ? (
+            <EmptyState
+              variant="compact"
+              className="border-0 shadow-none py-8"
+              title="No recent contract updates"
+              description="New contract analyses, status changes, and metadata edits will be logged here."
+            />
+          ) : (
+            <div className="divide-y divide-[var(--border)]">
+              {recentActivity.map((act) => (
+                <div
+                  key={act.id}
+                  className="flex items-center justify-between p-3.5 transition hover:bg-[var(--surface-muted)]"
+                >
+                  <div className="min-w-0 flex-1 pr-4">
+                    <Link
+                      href={`/dashboard/contracts/${act.id}`}
+                      className="text-xs font-bold text-[var(--foreground)] hover:text-blue-600 transition truncate block"
+                    >
+                      {act.title}
+                    </Link>
+                    <p className="mt-0.5 text-[11px] text-[var(--text-secondary)]">
+                      {act.company} • Updated {act.lastUpdated}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <RiskBadge risk={act.riskLevel as any} />
+                    <Link
+                      href={`/dashboard/contracts/${act.id}`}
+                      className="text-xs font-bold text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      Open →
+                    </Link>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <RiskBadge risk={act.riskLevel as any} />
-                  <Link
-                    href={`/dashboard/contracts/${act.id}`}
-                    className="text-xs font-bold text-blue-600 hover:underline dark:text-blue-400"
-                  >
-                    Open →
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -1311,7 +1497,7 @@ export default function EnterpriseDashboardPage() {
 
               <button
                 onClick={() => setSelectedContract(null)}
-                className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800 transition"
+                className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800 transition cursor-pointer"
                 aria-label="Close panel"
               >
                 ✕
@@ -1443,7 +1629,7 @@ export default function EnterpriseDashboardPage() {
               <button
                 type="button"
                 onClick={() => setSelectedContract(null)}
-                className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface)] transition"
+                className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface)] transition cursor-pointer"
               >
                 Close Preview
               </button>
