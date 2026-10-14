@@ -204,3 +204,92 @@ export async function fetchNotifications() {
     return [];
   }
 }
+
+export interface UserRecord {
+  id: string;
+  email: string;
+  full_name: string;
+  role: "ADMIN" | "CONTRACT_MANAGER" | "VIEWER";
+  can_delete?: boolean;
+  created_at?: string;
+}
+
+export function getCurrentUser(): UserRecord | null {
+  if (typeof window !== "undefined") {
+    const raw = localStorage.getItem("contractiq-user");
+    if (raw) {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+export function getCurrentUserRole(): "ADMIN" | "CONTRACT_MANAGER" | "VIEWER" {
+  const user = getCurrentUser();
+  return user?.role || "CONTRACT_MANAGER";
+}
+
+export function canDeleteContracts(user?: UserRecord | null): boolean {
+  const u = user !== undefined ? user : getCurrentUser();
+  if (!u) return false;
+  if (u.role === "ADMIN") return true;
+  if (u.role === "CONTRACT_MANAGER" && Boolean(u.can_delete)) return true;
+  return false;
+}
+
+export async function deleteContract(id: string): Promise<{ message: string; id: string }> {
+  const res = await fetch(`${API_BASE_URL}/contracts/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to delete contract");
+  }
+  return await res.json();
+}
+
+export async function updateContract(id: string, data: Partial<ContractRecord>): Promise<ContractRecord> {
+  const res = await fetch(`${API_BASE_URL}/contracts/${id}`, {
+    method: "PATCH",
+    headers: getAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to update contract");
+  }
+  return await res.json();
+}
+
+export async function fetchUsers(): Promise<UserRecord[]> {
+  const res = await fetch(`${API_BASE_URL}/auth/users`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to fetch workspace users");
+  }
+  return await res.json();
+}
+
+export async function updateUserRole(userId: string, role: string, canDelete?: boolean): Promise<UserRecord> {
+  const payload: { role: string; can_delete?: boolean } = { role };
+  if (canDelete !== undefined) {
+    payload.can_delete = canDelete;
+  }
+  const res = await fetch(`${API_BASE_URL}/auth/users/${userId}/role`, {
+    method: "PATCH",
+    headers: getAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to update user role");
+  }
+  return await res.json();
+}

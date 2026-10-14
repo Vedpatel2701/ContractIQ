@@ -1,21 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StatusBadge, RiskBadge, DemoBadge } from "@/components/ui/status-badge";
-import { fetchContractById, getAuthToken } from "@/lib/api";
+import { fetchContractById, getAuthToken, getCurrentUser, canDeleteContracts, deleteContract, type UserRecord } from "@/lib/api";
 import type { ContractRecord } from "@/types/contracts";
 
 export default function ContractDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const id = params?.id;
   const [contract, setContract] = useState<ContractRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<UserRecord | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCurrentUser(getCurrentUser());
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -37,6 +46,22 @@ export default function ContractDetailPage() {
       mounted = false;
     };
   }, [id]);
+
+  const hasDeletePermission = canDeleteContracts(currentUser);
+
+  const handleDeleteContract = async () => {
+    if (!contract || isDeleting) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteContract(contract.id);
+      setShowDeleteModal(false);
+      router.push("/dashboard/contracts");
+    } catch (err: any) {
+      setDeleteError(err?.message || "Failed to delete contract. Please try again.");
+      setIsDeleting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -108,6 +133,19 @@ export default function ContractDetailPage() {
             >
               📄 View Document
             </a>
+            {hasDeletePermission && (
+              <button
+                type="button"
+                id="delete-contract-trigger"
+                onClick={() => {
+                  setDeleteError(null);
+                  setShowDeleteModal(true);
+                }}
+                className="inline-flex items-center justify-center font-semibold rounded-lg shadow-sm transition-all px-4 py-2 text-sm border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-950/70 cursor-pointer"
+              >
+                🗑️ Delete Contract
+              </button>
+            )}
           </div>
         }
       />
@@ -212,6 +250,73 @@ export default function ContractDetailPage() {
           </Card>
         </div>
       </div>
+
+      {/* Contract Deletion Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300">
+                ⚠️
+              </span>
+              <div>
+                <h3 className="text-base font-bold text-[var(--foreground)]">Confirm Contract Deletion</h3>
+                <p className="text-xs text-[var(--text-muted)]">Administrative Authorization Required</p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3.5 space-y-2 text-xs">
+              <p className="text-[var(--foreground)] leading-relaxed">
+                You are about to delete agreement:
+              </p>
+              <div className="font-semibold text-sm text-[var(--foreground)]">
+                {contract.name}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                <span>Contract ID:</span>
+                <span className="font-mono bg-[var(--surface)] px-1.5 py-0.5 rounded border border-[var(--border)] text-[var(--foreground)] font-medium">
+                  {contract.id}
+                </span>
+                <span>•</span>
+                <span>{contract.company}</span>
+              </div>
+            </div>
+
+            <p className="text-xs leading-relaxed text-[var(--text-secondary)]">
+              This action will permanently delete the agreement, all extracted clauses, risk indicators, notification reminders, vector search embeddings, and chat history.
+            </p>
+
+            {deleteError && (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-300">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteError(null);
+                }}
+                disabled={isDeleting}
+              >
+                Cancel
+              </Button>
+              <button
+                type="button"
+                id="confirm-delete-btn"
+                onClick={handleDeleteContract}
+                disabled={isDeleting}
+                className="inline-flex items-center justify-center rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-rose-700 disabled:opacity-50 transition cursor-pointer"
+              >
+                {isDeleting ? "Deleting Contract..." : "Confirm & Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

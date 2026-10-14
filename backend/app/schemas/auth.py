@@ -18,6 +18,7 @@ class UserResponse(BaseModel):
     email: str
     full_name: str
     role: UserRole
+    can_delete: Optional[bool] = False
     created_at: Optional[datetime] = None
 
     class Config:
@@ -30,3 +31,4 @@ class Token(BaseModel):
 
 class RoleUpdate(BaseModel):
     role: UserRole
+    can_delete: Optional[bool] = None

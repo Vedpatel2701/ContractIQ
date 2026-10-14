@@ -5,7 +5,7 @@ import React, { useRef, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { uploadContractFile, ContractUploadError, type UploadErrorDetail } from "@/lib/api";
+import { uploadContractFile, ContractUploadError, getCurrentUser, type UploadErrorDetail, type UserRecord } from "@/lib/api";
 
 const supportedFormats = ["PDF", "DOCX", "TXT", "RTF"];
 const maxFileSizeMB = 10;
@@ -21,6 +21,7 @@ const analysisSteps = [
 export default function AnalyzeContractPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   
+  const [currentUser, setCurrentUser] = useState<UserRecord | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [companyName, setCompanyName] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -28,6 +29,10 @@ export default function AnalyzeContractPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [errorDetail, setErrorDetail] = useState<UploadErrorDetail | null>(null);
   const [completedContractId, setCompletedContractId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    setCurrentUser(getCurrentUser());
+  }, []);
 
   const validateAndSelectFile = (selected: File | null) => {
     if (!selected) {
@@ -115,17 +120,33 @@ export default function AnalyzeContractPage() {
         description="Upload any agreement to automatically extract key terms, identify potential legal risks, and enable AI question answering."
       />
 
-      {/* Upload Box Container */}
-      <Card className="p-6 sm:p-8">
-        {!isProcessing && !completedContractId ? (
-          <div className="space-y-6">
-            {/* Drag & Drop Zone */}
-            <div
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                validateAndSelectFile(e.dataTransfer.files?.[0] ?? null);
-              }}
+      {currentUser?.role === "VIEWER" ? (
+        <Card className="border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 p-6 space-y-3">
+          <div className="flex items-center gap-2.5 text-amber-800 dark:text-amber-300 font-bold text-sm">
+            <span>🔒</span>
+            <span>Upload Permissions Restricted</span>
+          </div>
+          <p className="text-xs text-amber-900 dark:text-amber-400 leading-relaxed">
+            Your current account role is <strong>Viewer</strong>. Viewers have read-only access to existing authorized contracts and assistant capabilities, but cannot upload or analyze new documents. Please contact a workspace Administrator to obtain upload permissions.
+          </p>
+          <div className="pt-2">
+            <Button href="/dashboard/contracts" variant="outline" size="sm">
+              ← Return to Contracts Directory
+            </Button>
+          </div>
+        </Card>
+      ) : (
+        /* Upload Box Container */
+        <Card className="p-6 sm:p-8">
+          {!isProcessing && !completedContractId ? (
+            <div className="space-y-6">
+              {/* Drag & Drop Zone */}
+              <div
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  validateAndSelectFile(e.dataTransfer.files?.[0] ?? null);
+                }}
               className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-[var(--border-strong)] bg-[var(--surface-muted)] p-10 text-center transition-colors hover:border-blue-500"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400">
@@ -339,6 +360,7 @@ export default function AnalyzeContractPage() {
           </div>
         )}
       </Card>
+      )}
     </div>
   );
 }

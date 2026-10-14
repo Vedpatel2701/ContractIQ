@@ -57,8 +57,12 @@ def get_current_user_or_demo(
                     return user
         except Exception:
             pass
-    # Fallback to demo admin user so read-only contract browsing never fails
-    demo_user = db.query(User).filter(User.email == "admin@gmail.com").first()
+    # Fallback to demo viewer user so unauthenticated guests can only view public demo contracts
+    # and cannot bypass data isolation to access private or administrative contracts
+    demo_user = db.query(User).filter(User.email == "viewer@gmail.com").first()
+    if demo_user:
+        return demo_user
+    demo_user = db.query(User).filter(User.role == UserRole.VIEWER.value).first()
     if demo_user:
         return demo_user
     raise HTTPException(

@@ -154,14 +154,16 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Primary CTA */}
-        <div className="p-4">
-          <Link
-            href="/dashboard/contracts/upload"
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98]"
-          >
-            + Analyze Contract
-          </Link>
-        </div>
+        {currentUser?.role !== "VIEWER" && (
+          <div className="p-4">
+            <Link
+              href="/dashboard/contracts/upload"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98]"
+            >
+              + Analyze Contract
+            </Link>
+          </div>
+        )}
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 px-3 py-2">
@@ -259,12 +261,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard/contracts/upload"
-              className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 lg:hidden"
-            >
-              + Analyze
-            </Link>
+            {currentUser?.role !== "VIEWER" && (
+              <Link
+                href="/dashboard/contracts/upload"
+                className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 lg:hidden"
+              >
+                + Analyze
+              </Link>
+            )}
             <div className="lg:hidden">
               <ThemeToggle />
             </div>

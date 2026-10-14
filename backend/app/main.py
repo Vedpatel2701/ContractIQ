@@ -55,13 +55,24 @@ def init_db():
                 connection.execute(text("ALTER TABLE chat_messages ALTER COLUMN contract_id DROP NOT NULL;"))
             except Exception:
                 pass
+
+    # Users table migration
+    existing_user_columns = {column["name"] for column in inspect(engine).get_columns("users")}
+    user_migrations = {
+        "can_delete": "BOOLEAN DEFAULT FALSE",
+    }
+    with engine.begin() as connection:
+        for name, definition in user_migrations.items():
+            if name not in existing_user_columns:
+                connection.execute(text(f"ALTER TABLE users ADD COLUMN {name} {definition}"))
+
     db = SessionLocal()
     try:
         # 1. Seed Default Users (Development / Academic Demo Accounts)
         seed_users = [
-            {"email": "admin@gmail.com", "old_email": "admin@contractiq.com", "full_name": "Admin User", "password": "admin123", "role": UserRole.ADMIN.value},
-            {"email": "manager@gmail.com", "old_email": "manager@contractiq.com", "full_name": "Contract Manager", "password": "manager123", "role": UserRole.CONTRACT_MANAGER.value},
-            {"email": "viewer@gmail.com", "old_email": "viewer@contractiq.com", "full_name": "Viewer User", "password": "viewer123", "role": UserRole.VIEWER.value},
+            {"email": "admin@gmail.com", "old_email": "admin@contractiq.com", "full_name": "Admin User", "password": "admin123", "role": UserRole.ADMIN.value, "can_delete": True},
+            {"email": "manager@gmail.com", "old_email": "manager@contractiq.com", "full_name": "Contract Manager", "password": "manager123", "role": UserRole.CONTRACT_MANAGER.value, "can_delete": False},
+            {"email": "viewer@gmail.com", "old_email": "viewer@contractiq.com", "full_name": "Viewer User", "password": "viewer123", "role": UserRole.VIEWER.value, "can_delete": False},
         ]
         admin_user_id = None
         for u in seed_users:
@@ -73,6 +84,7 @@ def init_db():
                     user_obj.full_name = u["full_name"]
                     user_obj.hashed_password = hash_password(u["password"])
                     user_obj.role = u["role"]
+                    user_obj.can_delete = u.get("can_delete", False)
                     db.commit()
                     db.refresh(user_obj)
             if not user_obj:
@@ -81,7 +93,8 @@ def init_db():
                     email=u["email"],
                     full_name=u["full_name"],
                     hashed_password=hashed_pwd,
-                    role=u["role"]
+                    role=u["role"],
+                    can_delete=u.get("can_delete", False)
                 )
                 db.add(user_obj)
                 db.commit()
@@ -89,6 +102,7 @@ def init_db():
             else:
                 user_obj.hashed_password = hash_password(u["password"])
                 user_obj.role = u["role"]
+                user_obj.can_delete = u.get("can_delete", False)
                 db.commit()
                 db.refresh(user_obj)
 

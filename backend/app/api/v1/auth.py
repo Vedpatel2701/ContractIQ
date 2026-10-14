@@ -27,6 +27,14 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
 
 @router.post("/register", response_model=UserResponse)
 def register(payload: UserRegister, db: Session = Depends(get_db)):
+    # Privilege escalation protection: prevent self-assigning ADMIN role on registration
+    requested_role = payload.role.value if isinstance(payload.role, UserRole) else payload.role
+    if requested_role == UserRole.ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator role cannot be self-assigned during registration. Please contact an administrator."
+        )
+
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
         raise HTTPException(
@@ -34,12 +42,13 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
             detail="Email address is already registered"
         )
     hashed_pwd = hash_password(payload.password)
-    user_role = payload.role.value if isinstance(payload.role, UserRole) else (payload.role or UserRole.CONTRACT_MANAGER.value)
+    user_role = requested_role or UserRole.CONTRACT_MANAGER.value
     new_user = User(
         email=payload.email,
         full_name=payload.full_name,
         hashed_password=hashed_pwd,
-        role=user_role
+        role=user_role,
+        can_delete=False
     )
     db.add(new_user)
     db.commit()
@@ -68,7 +77,12 @@ def update_user_role(
     target_user = db.query(User).filter(User.id == user_id).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
-    target_user.role = payload.role.value if isinstance(payload.role, UserRole) else payload.role
+    new_role = payload.role.value if isinstance(payload.role, UserRole) else payload.role
+    target_user.role = new_role
+    if payload.can_delete is not None:
+        target_user.can_delete = payload.can_delete
+    elif new_role == UserRole.ADMIN.value:
+        target_user.can_delete = True
     db.commit()
     db.refresh(target_user)
     return target_user

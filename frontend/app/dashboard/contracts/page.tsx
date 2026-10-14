@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StatusBadge, RiskBadge } from "@/components/ui/status-badge";
-import { fetchContracts } from "@/lib/api";
+import { fetchContracts, getCurrentUser, type UserRecord } from "@/lib/api";
 import type { ContractRecord } from "@/types/contracts";
 
 const statusOptions = ["All", "Active", "Review Required", "Draft", "Expired"] as const;
@@ -15,10 +15,15 @@ const riskOptions = ["All", "Low", "Moderate", "High", "Critical"] as const;
 
 export default function ContractsDirectoryPage() {
   const [contractList, setContractList] = useState<ContractRecord[]>([]);
+  const [currentUser, setCurrentUser] = useState<UserRecord | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<(typeof statusOptions)[number]>("All");
   const [risk, setRisk] = useState<(typeof riskOptions)[number]>("All");
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    setCurrentUser(getCurrentUser());
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -65,9 +70,11 @@ export default function ContractsDirectoryPage() {
         title="Contracts"
         description="Search, filter, and review all agreements analyzed in your workspace."
         actions={
-          <Button href="/dashboard/contracts/upload">
-            + Analyze Contract
-          </Button>
+          currentUser?.role !== "VIEWER" ? (
+            <Button href="/dashboard/contracts/upload">
+              + Analyze Contract
+            </Button>
+          ) : undefined
         }
       />
 

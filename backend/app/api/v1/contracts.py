@@ -13,7 +13,7 @@ from app.models.contract import Contract
 from app.models.clause import Clause
 from app.models.risk import RiskIndicator
 from app.models.user import User, UserRole
-from app.schemas.contract import ContractResponse
+from app.schemas.contract import ContractResponse, ContractUpdate
 from app.services.extractor import extract_text_from_file
 from app.services.chunker import chunk_contract_text
 from app.services.vector_store import VectorStore
@@ -270,32 +270,94 @@ async def upload_contract(
                 except Exception:
                     time.sleep(0.05)
 
-@router.delete("/{contract_id}")
-def delete_contract(
+@router.patch("/{contract_id}", response_model=ContractResponse, response_model_by_alias=False)
+@router.put("/{contract_id}", response_model=ContractResponse, response_model_by_alias=False)
+def update_contract(
     contract_id: str,
+    payload: ContractUpdate,
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.CONTRACT_MANAGER])),
     db: Session = Depends(get_db)
 ):
     contract = verify_contract_access(contract_id, current_user, db)
     
-    # Contract Manager can only delete contracts they own (or admins can delete any)
+    # Contract Manager can only edit contracts they own; Admin can edit any
     user_role_str = current_user.role.value if isinstance(current_user.role, UserRole) else str(current_user.role)
     if user_role_str != UserRole.ADMIN.value and contract.owner_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Contract managers can only delete contracts they own"
+            detail="Contract managers can only edit contracts they own"
         )
-    
-    # Delete vector index if exists
-    vector_file = settings.VECTOR_INDEX_DIR / f"{contract_id}_index.json"
-    if vector_file.exists():
-        vector_file.unlink()
 
-    # Delete uploaded files
-    upload_dir = settings.UPLOAD_DIR / contract_id
-    if upload_dir.exists():
-        shutil.rmtree(upload_dir, ignore_errors=True)
+    update_dict = payload.model_dump(exclude_unset=True)
+    field_mapping = {
+        "contractType": "contract_type",
+        "riskLevel": "risk_level",
+        "startDate": "start_date",
+        "expiryDate": "expiry_date",
+        "renewalDate": "renewal_date",
+        "noticePeriod": "notice_period",
+        "paymentTerms": "payment_terms",
+        "penaltyInfo": "penalty_info",
+    }
+    for key, value in update_dict.items():
+        attr_name = field_mapping.get(key, key)
+        if hasattr(contract, attr_name):
+            setattr(contract, attr_name, value)
 
-    db.delete(contract)
     db.commit()
+    db.refresh(contract)
+    return format_contract_response(contract)
+
+@router.delete("/{contract_id}")
+def delete_contract(
+    contract_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    contract = verify_contract_access(contract_id, current_user, db)
+    
+    # Contract deletion authorization: restricted to administrators by default.
+    # Contract managers can only delete contracts if explicitly granted delete permission by an admin.
+    # Viewers can never delete contracts.
+    user_role_str = current_user.role.value if isinstance(current_user.role, UserRole) else str(current_user.role)
+    is_admin = user_role_str == UserRole.ADMIN.value
+    can_delete = getattr(current_user, "can_delete", False)
+
+    if not is_admin:
+        if user_role_str != UserRole.CONTRACT_MANAGER.value or not can_delete:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Contract deletion is restricted to administrators"
+            )
+        # If granted explicit delete permission, manager can only delete contracts they own
+        if contract.owner_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only delete contracts you own"
+            )
+
+    try:
+        # Delete vector index if exists
+        vector_file = settings.VECTOR_INDEX_DIR / f"{contract_id}_index.json"
+        if vector_file.exists():
+            try:
+                vector_file.unlink()
+            except Exception:
+                pass
+
+        # Delete uploaded files
+        upload_dir = settings.UPLOAD_DIR / contract_id
+        if upload_dir.exists():
+            shutil.rmtree(upload_dir, ignore_errors=True)
+
+        # Safe transactional deletion: cascades automatically delete clauses, chunks, risks, notifs, chat messages
+        db.delete(contract)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete contract safely: {str(e)}"
+        )
+
     return {"message": "Contract deleted successfully", "id": contract_id}
