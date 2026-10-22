@@ -134,6 +134,26 @@ def test_deployment_safeguards():
     assert "https://app.example.com" in parsed_json
     print(" [PASS] JSON-formatted CORS origins parsed correctly.")
 
+    # Test 4C: Deployed Vercel frontend preflight OPTIONS to /api/v1/auth/login
+    from fastapi.testclient import TestClient
+    from app.main import app as main_app
+    tc = TestClient(main_app)
+    prod_origin = "https://contract-iq-lime.vercel.app"
+    res_preflight = tc.options(
+        "/api/v1/auth/login",
+        headers={
+            "Origin": prod_origin,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        }
+    )
+    assert res_preflight.status_code == 200, f"Expected 200, got {res_preflight.status_code}"
+    assert res_preflight.headers.get("access-control-allow-origin") == prod_origin
+    assert res_preflight.headers.get("access-control-allow-credentials") == "true"
+    assert "POST" in res_preflight.headers.get("access-control-allow-methods", "")
+    assert "authorization" in res_preflight.headers.get("access-control-allow-headers", "").lower()
+    print(f" [PASS] Deployed frontend '{prod_origin}' received valid CORS preflight headers (200 OK).")
+
     print("\n" + "=" * 65)
     print(" 5. TESTING AUTHENTICATION & SECURITY PRIMITIVES")
     print("=" * 65)

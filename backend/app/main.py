@@ -174,8 +174,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"] if has_wildcard else cors_origins,
     allow_credentials=False if has_wildcard else True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=86400,
 )
 
 # Include API v1 router

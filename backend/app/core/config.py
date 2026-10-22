@@ -30,6 +30,7 @@ class Settings(BaseSettings):
 
     # CORS: Accepts list of origins or comma-separated string from environment
     CORS_ORIGINS: Union[List[str], str] = [
+        "https://contract-iq-lime.vercel.app",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ]
@@ -92,16 +93,29 @@ class Settings(BaseSettings):
         """Returns a sanitized list of CORS origins."""
         origins: List[str] = []
         if isinstance(self.CORS_ORIGINS, list):
-            origins = list(self.CORS_ORIGINS)
+            origins = [str(item).strip() for item in self.CORS_ORIGINS if str(item).strip()]
         elif isinstance(self.CORS_ORIGINS, str):
             origins = [s.strip() for s in self.CORS_ORIGINS.split(",") if s.strip()]
 
-        # Ensure local development hosts are present for convenience
-        default_dev = ["http://localhost:3000", "http://127.0.0.1:3000"]
-        for d in default_dev:
-            if d not in origins and "*" not in origins:
-                origins.append(d)
-        return origins
+        # Ensure deployed production frontend and local development hosts are always permitted
+        default_origins = [
+            "https://contract-iq-lime.vercel.app",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ]
+        for d in default_origins:
+            norm_d = d.rstrip("/")
+            if norm_d not in [o.rstrip("/") for o in origins]:
+                origins.append(norm_d)
+
+        # Normalize all origins: strip trailing slashes (browsers send Origin header without trailing slash)
+        cleaned_origins: List[str] = []
+        for o in origins:
+            clean = o.rstrip("/")
+            if clean and clean not in cleaned_origins:
+                cleaned_origins.append(clean)
+
+        return cleaned_origins
 
     def validate_production_configuration(self) -> None:
         """
