@@ -13,7 +13,7 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
         pwd_bytes = plain_password.encode('utf-8')
-        hashed_bytes = hashed_password.encode('utf-8')
+        hashed_bytes = hashed_password.strip().encode('utf-8')
         return bcrypt.checkpw(pwd_bytes, hashed_bytes)
     except Exception:
         return False

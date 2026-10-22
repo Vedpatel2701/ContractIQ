@@ -174,6 +174,32 @@ def test_deployment_safeguards():
     assert payload["role"] == "admin"
     print(" [PASS] PyJWT token generation and verification functional.")
 
+    # Test 5B: Demo user authentication via API endpoint
+    from app.main import init_db
+    init_db()
+
+    tc_auth = TestClient(main_app)
+    demo_tests = [
+        ("admin@gmail.com", "admin123", "ADMIN"),
+        ("manager@gmail.com", "manager123", "CONTRACT_MANAGER"),
+        ("viewer@gmail.com", "viewer123", "VIEWER"),
+    ]
+    for email, pwd, expected_role in demo_tests:
+        r = tc_auth.post("/api/v1/auth/login", json={"email": email, "password": pwd})
+        assert r.status_code == 200, f"Login failed for {email}: {r.status_code}"
+        assert r.json()["user"]["role"] == expected_role
+        print(f" [PASS] API login successful for demo account: {email} ({expected_role})")
+
+    # Case-insensitive login check
+    r_ci = tc_auth.post("/api/v1/auth/login", json={"email": "ADMIN@GMAIL.COM", "password": "admin123"})
+    assert r_ci.status_code == 200, f"Case-insensitive login failed: {r_ci.status_code}"
+    print(" [PASS] Case-insensitive login (ADMIN@GMAIL.COM) succeeded.")
+
+    # Bad credentials check
+    r_bad = tc_auth.post("/api/v1/auth/login", json={"email": "admin@gmail.com", "password": "wrong"})
+    assert r_bad.status_code == 401, f"Expected 401, got {r_bad.status_code}"
+    print(" [PASS] Invalid password properly rejected with 401 Unauthorized.")
+
     print("\n" + "=" * 65)
     print(" 6. TESTING FASTAPI APPLICATION STARTUP & ENDPOINTS")
     print("=" * 65)

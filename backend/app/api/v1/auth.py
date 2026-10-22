@@ -1,5 +1,6 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import hash_password, verify_password, create_access_token
@@ -11,7 +12,8 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @router.post("/login", response_model=Token)
 def login(payload: UserLogin, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == payload.email).first()
+    clean_email = str(payload.email).strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == clean_email).first()
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -35,7 +37,8 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
             detail="Administrator role cannot be self-assigned during registration. Please contact an administrator."
         )
 
-    existing = db.query(User).filter(User.email == payload.email).first()
+    clean_email = str(payload.email).strip().lower()
+    existing = db.query(User).filter(func.lower(User.email) == clean_email).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -44,7 +47,7 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
     hashed_pwd = hash_password(payload.password)
     user_role = requested_role or UserRole.CONTRACT_MANAGER.value
     new_user = User(
-        email=payload.email,
+        email=clean_email,
         full_name=payload.full_name,
         hashed_password=hashed_pwd,
         role=user_role,

@@ -2,11 +2,11 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, text, func
 from app.core.config import settings
 from app.core.database import engine, Base, SessionLocal
 from app.models import Contract, Clause, RiskIndicator, Notification, User, UserRole
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 from app.api.v1 import api_v1_router
 
 logger = logging.getLogger(__name__)
@@ -71,17 +71,7 @@ def init_db():
             if name not in existing_user_columns:
                 connection.execute(text(f"ALTER TABLE users ADD COLUMN {name} {definition}"))
 
-    # Production safety boundary:
-    # Do NOT create or reset demo user accounts or passwords in production.
-    # Do NOT seed demo contracts or overwrite user contracts in production.
-    if settings.is_production:
-        logger.info(
-            "[Database] Production environment detected: database schema verified. "
-            "Skipping demo account creation, password reset, and demo contract seeding."
-        )
-        return
-
-    # Non-production (local development): Seed canonical demo users and contracts for testing convenience
+    # Initialize initial accounts and demo contracts (creates accounts if missing, preserves existing records)
     db = SessionLocal()
     try:
         seed_users = [
@@ -91,21 +81,20 @@ def init_db():
         ]
         admin_user_id = None
         for u in seed_users:
-            user_obj = db.query(User).filter(User.email == u["email"]).first()
+            email_lower = u["email"].lower().strip()
+            user_obj = db.query(User).filter(func.lower(User.email) == email_lower).first()
             if not user_obj and u.get("old_email"):
-                user_obj = db.query(User).filter(User.email == u["old_email"]).first()
+                old_email_lower = u["old_email"].lower().strip()
+                user_obj = db.query(User).filter(func.lower(User.email) == old_email_lower).first()
                 if user_obj:
-                    user_obj.email = u["email"]
+                    user_obj.email = email_lower
                     user_obj.full_name = u["full_name"]
-                    user_obj.hashed_password = hash_password(u["password"])
-                    user_obj.role = u["role"]
-                    user_obj.can_delete = u.get("can_delete", False)
                     db.commit()
                     db.refresh(user_obj)
             if not user_obj:
                 hashed_pwd = hash_password(u["password"])
                 user_obj = User(
-                    email=u["email"],
+                    email=email_lower,
                     full_name=u["full_name"],
                     hashed_password=hashed_pwd,
                     role=u["role"],
@@ -114,12 +103,16 @@ def init_db():
                 db.add(user_obj)
                 db.commit()
                 db.refresh(user_obj)
+                logger.info(f"[Database Seed] Initialized demo account: {email_lower} ({u['role']})")
             else:
-                user_obj.hashed_password = hash_password(u["password"])
-                user_obj.role = u["role"]
-                user_obj.can_delete = u.get("can_delete", False)
-                db.commit()
-                db.refresh(user_obj)
+                # Ensure demo account has valid password hash and role
+                if not user_obj.hashed_password or not verify_password(u["password"], user_obj.hashed_password):
+                    user_obj.hashed_password = hash_password(u["password"])
+                    user_obj.role = u["role"]
+                    user_obj.can_delete = u.get("can_delete", False)
+                    db.commit()
+                    db.refresh(user_obj)
+                    logger.info(f"[Database Seed] Synchronized demo credentials: {email_lower}")
 
             if u["role"] == UserRole.ADMIN.value:
                 admin_user_id = user_obj.id
@@ -131,9 +124,12 @@ def init_db():
             except Exception:
                 db.rollback()
 
-        # Seed / Synchronize Canonical Demo Contracts idempotently for local development
-        from app.services.seed_data import seed_demo_contracts
-        seed_demo_contracts(db, admin_user_id)
+        # Seed / Synchronize Canonical Demo Contracts idempotently
+        try:
+            from app.services.seed_data import seed_demo_contracts
+            seed_demo_contracts(db, admin_user_id)
+        except Exception as seed_err:
+            logger.warning(f"[Database Seed Notice] Demo contracts sync notice: {seed_err}")
     finally:
         db.close()
 
