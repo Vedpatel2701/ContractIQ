@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,15 +9,19 @@ from app.models import Contract, Clause, RiskIndicator, Notification, User, User
 from app.core.security import hash_password
 from app.api.v1 import api_v1_router
 
+logger = logging.getLogger(__name__)
+
 
 def init_db():
-    """Initializes tables, seed users, and initial contracts if database is empty."""
+    """Initializes tables, applies schema additions, and conditionally seeds development demo data."""
+    # Ensure all tables exist in the target database
     Base.metadata.create_all(bind=engine)
-    # SQLite does not apply new ORM columns to an existing local database.
+
+    # SQLite does not apply new ORM columns to an existing local database; PostgreSQL needs safe column additions.
     existing_columns = {column["name"] for column in inspect(engine).get_columns("contracts")}
     migrations = {
         "payment_status": "VARCHAR DEFAULT 'Paid'",
-        "is_demo": "BOOLEAN DEFAULT 0",
+        "is_demo": "BOOLEAN DEFAULT FALSE",
         "owner_id": "VARCHAR",
     }
     with engine.begin() as connection:
@@ -66,9 +71,19 @@ def init_db():
             if name not in existing_user_columns:
                 connection.execute(text(f"ALTER TABLE users ADD COLUMN {name} {definition}"))
 
+    # Production safety boundary:
+    # Do NOT create or reset demo user accounts or passwords in production.
+    # Do NOT seed demo contracts or overwrite user contracts in production.
+    if settings.is_production:
+        logger.info(
+            "[Database] Production environment detected: database schema verified. "
+            "Skipping demo account creation, password reset, and demo contract seeding."
+        )
+        return
+
+    # Non-production (local development): Seed canonical demo users and contracts for testing convenience
     db = SessionLocal()
     try:
-        # 1. Seed Default Users (Development / Academic Demo Accounts)
         seed_users = [
             {"email": "admin@gmail.com", "old_email": "admin@contractiq.com", "full_name": "Admin User", "password": "admin123", "role": UserRole.ADMIN.value, "can_delete": True},
             {"email": "manager@gmail.com", "old_email": "manager@contractiq.com", "full_name": "Contract Manager", "password": "manager123", "role": UserRole.CONTRACT_MANAGER.value, "can_delete": False},
@@ -116,16 +131,34 @@ def init_db():
             except Exception:
                 db.rollback()
 
-        # 2. Seed / Synchronize Canonical Demo Contracts idempotently
+        # Seed / Synchronize Canonical Demo Contracts idempotently for local development
         from app.services.seed_data import seed_demo_contracts
         seed_demo_contracts(db, admin_user_id)
     finally:
         db.close()
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 1. Enforce strict configuration validation in production (SECRET_KEY, PostgreSQL DATABASE_URL)
+    settings.validate_production_configuration()
+
+    # 2. Test database connection liveness before accepting requests
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        logger.info("[Database] Connection successfully verified on startup.")
+    except Exception as exc:
+        logger.critical(f"[Database Error] Failed to connect to database during startup: {exc}")
+        raise RuntimeError(
+            f"Fatal startup error: Unable to connect to the database. Verify DATABASE_URL. Error: {exc}"
+        ) from exc
+
+    # 3. Apply schema migrations safely and initialize data
     init_db()
+
     yield
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -133,17 +166,21 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS configuration
+# CORS configuration: dynamically adapts to production domain(s) or development localhost
+cors_origins = settings.parsed_cors_origins
+has_wildcard = "*" in cors_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow development frontend
-    allow_credentials=True,
+    allow_origins=["*"] if has_wildcard else cors_origins,
+    allow_credentials=False if has_wildcard else True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Include API v1 router
 app.include_router(api_v1_router, prefix=settings.API_V1_STR)
+
 
 @app.get("/")
 def root():
@@ -153,6 +190,11 @@ def root():
         "version": settings.VERSION
     }
 
+
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    """Health check endpoint used by Render and Docker probes."""
+    return {
+        "status": "healthy",
+        "version": settings.VERSION
+    }
