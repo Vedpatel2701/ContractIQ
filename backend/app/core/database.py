@@ -5,7 +5,15 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+db_url = settings.DATABASE_URL
+if db_url.startswith("postgresql+psycopg://"):
+    db_url = "postgresql+psycopg2://" + db_url[len("postgresql+psycopg://"):]
+elif db_url.startswith("postgres://"):
+    db_url = "postgresql+psycopg2://" + db_url[len("postgres://"):]
+elif db_url.startswith("postgresql://"):
+    db_url = "postgresql+psycopg2://" + db_url[len("postgresql://"):]
+
+is_sqlite = db_url.startswith("sqlite")
 
 # Engine connection arguments & pooling configuration
 engine_kwargs = {"echo": False}
@@ -19,7 +27,7 @@ else:
     engine_kwargs["pool_pre_ping"] = True
     engine_kwargs["pool_recycle"] = 300
 
-engine = create_engine(settings.DATABASE_URL, **engine_kwargs)
+engine = create_engine(db_url, **engine_kwargs)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

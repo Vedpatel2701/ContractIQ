@@ -76,11 +76,21 @@ def test_deployment_safeguards():
     print(" 2. TESTING DATABASE URL NORMALIZATION & POOLING")
     print("=" * 65)
 
-    # Test 2A: postgres:// to postgresql:// normalization
-    neon_url = "postgres://user:password@ep-sample.us-east-2.aws.neon.tech/contractiq?sslmode=require"
-    s = Settings(DATABASE_URL=neon_url)
-    assert s.DATABASE_URL.startswith("postgresql://"), f"Expected postgresql:// prefix, got {s.DATABASE_URL}"
-    print(f" [PASS] Normalized {neon_url[:20]}... -> {s.DATABASE_URL[:24]}...")
+    # Test 2A: Verify PostgreSQL URL normalization to postgresql+psycopg2:// and driver selection
+    from sqlalchemy import create_engine
+    test_pg_urls = [
+        "postgresql+psycopg://user:password@ep-sample.us-east-2.aws.neon.tech/contractiq?sslmode=require",
+        "postgres://user:password@ep-sample.us-east-2.aws.neon.tech/contractiq?sslmode=require",
+        "postgresql://user:password@ep-sample.us-east-2.aws.neon.tech/contractiq?sslmode=require",
+        "postgresql+psycopg2://user:password@ep-sample.us-east-2.aws.neon.tech/contractiq?sslmode=require",
+    ]
+    for raw_url in test_pg_urls:
+        s = Settings(DATABASE_URL=raw_url)
+        assert s.DATABASE_URL.startswith("postgresql+psycopg2://"), f"Expected postgresql+psycopg2://, got {s.DATABASE_URL}"
+        # Create engine without connecting and verify driver is psycopg2
+        eng = create_engine(s.DATABASE_URL)
+        assert eng.dialect.driver == "psycopg2", f"Expected psycopg2 driver, got {eng.dialect.driver}"
+        print(f" [PASS] URL '{raw_url.split('@')[0]}...' -> '{s.DATABASE_URL.split('@')[0]}...' (Driver: {eng.dialect.driver})")
 
     # Test 2B: Database engine pool_pre_ping configuration
     from app.core.database import engine

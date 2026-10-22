@@ -51,9 +51,13 @@ class Settings(BaseSettings):
     def normalize_database_url(cls, v: Any) -> str:
         if isinstance(v, str):
             clean = v.strip().strip("'\"")
-            # Render / Neon frequently provide postgres:// which SQLAlchemy 2.0 rejects
-            if clean.startswith("postgres://"):
-                clean = "postgresql://" + clean[len("postgres://"):]
+            # Normalize PostgreSQL connection schemes to consistently use the installed psycopg2 driver
+            if clean.startswith("postgresql+psycopg://"):
+                clean = "postgresql+psycopg2://" + clean[len("postgresql+psycopg://"):]
+            elif clean.startswith("postgres://"):
+                clean = "postgresql+psycopg2://" + clean[len("postgres://"):]
+            elif clean.startswith("postgresql://"):
+                clean = "postgresql+psycopg2://" + clean[len("postgresql://"):]
             return clean
         return str(v)
 
